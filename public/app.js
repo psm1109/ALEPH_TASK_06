@@ -1,5 +1,4 @@
 const WORKSPACE_ID = "ccna-main";
-const CONFIG_STORAGE_KEY = "pds-diary:supabase-config";
 
 const initialPlan = {
   id: "preview-v1",
@@ -27,31 +26,21 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
 const elements = {
-  connectionButton: $("#connection-button"),
+  connectionStatus: $("#connection-status"),
   connectionLabel: $("#connection-label"),
   notice: $("#notice"),
   planDialog: $("#plan-dialog"),
   activityDialog: $("#activity-dialog"),
   reflectionDialog: $("#reflection-dialog"),
-  settingsDialog: $("#settings-dialog"),
   planForm: $("#plan-form"),
   activityForm: $("#activity-form"),
   reflectionForm: $("#reflection-form"),
-  settingsForm: $("#settings-form"),
 };
 
 function readConfig() {
   const embedded = window.__PDS_CONFIG__ ?? {};
-  if (embedded.supabaseUrl && embedded.supabaseAnonKey) {
-    return normalizeConfig({ url: embedded.supabaseUrl, key: embedded.supabaseAnonKey });
-  }
-
-  try {
-    const stored = JSON.parse(localStorage.getItem(CONFIG_STORAGE_KEY) || "null");
-    return stored?.url && stored?.key ? normalizeConfig(stored) : null;
-  } catch {
-    return null;
-  }
+  const config = normalizeConfig({ url: embedded.supabaseUrl, key: embedded.supabaseAnonKey });
+  return config.url && config.key ? config : null;
 }
 
 function normalizeConfig(config) {
@@ -96,8 +85,8 @@ async function supabaseRequest(table, { method = "GET", query = "", body } = {})
 
 async function connectAndLoad({ announce = true } = {}) {
   if (!hasConfig()) {
-    setConnectionState(false, "Supabase 설정 필요");
-    showNotice("우측 상단의 ‘Supabase 설정 필요’를 눌러 연결하면 기록이 Supabase에 영구 저장됩니다.");
+    setConnectionState("error", "Supabase 설정 누락");
+    showNotice("Supabase 연결 설정이 없습니다. public/config.js에 Project URL과 anon key를 입력해 주세요.", "error");
     return false;
   }
 
@@ -137,13 +126,13 @@ async function connectAndLoad({ announce = true } = {}) {
     state.activities = activities;
     state.reflections = reflections;
     state.connected = true;
-    setConnectionState(true, "Supabase 저장됨");
+    setConnectionState("connected", "Supabase 저장됨");
     if (announce) showNotice("Supabase에서 최신 기록을 불러왔습니다.", "success", 2800);
     renderAll();
     return true;
   } catch (error) {
     state.connected = false;
-    setConnectionState(false, "연결 확인 필요");
+    setConnectionState("error", "Supabase 연결 실패");
     showNotice(`Supabase에 연결하지 못했습니다. ${error.message}`, "error");
     return false;
   } finally {
@@ -158,8 +147,9 @@ function setLoading(isLoading) {
   });
 }
 
-function setConnectionState(connected, label) {
-  elements.connectionButton.classList.toggle("is-connected", connected);
+function setConnectionState(status, label) {
+  elements.connectionStatus.classList.toggle("is-connected", status === "connected");
+  elements.connectionStatus.classList.toggle("is-error", status === "error");
   elements.connectionLabel.textContent = label;
 }
 
@@ -390,15 +380,8 @@ function fillPlanForm() {
 
 function requireConnection() {
   if (state.connected) return true;
-  showNotice("기록을 저장하려면 먼저 Supabase를 연결해 주세요.");
-  openSettings();
+  showNotice("기록을 저장할 수 없습니다. public/config.js의 Supabase 설정과 연결 상태를 확인해 주세요.", "error");
   return false;
-}
-
-function openSettings() {
-  elements.settingsForm.elements.url.value = state.config?.url || "";
-  elements.settingsForm.elements.key.value = state.config?.key || "";
-  elements.settingsDialog.showModal();
 }
 
 function bindEvents() {
@@ -414,7 +397,6 @@ function bindEvents() {
     elements.activityDialog.showModal();
   }));
 
-  elements.connectionButton.addEventListener("click", openSettings);
   $("#edit-plan-button").addEventListener("click", () => {
     if (!requireConnection()) return;
     fillPlanForm();
@@ -425,17 +407,6 @@ function bindEvents() {
     elements.reflectionForm.reset();
     elements.reflectionForm.elements.reflection_date.value = toISODate(new Date());
     elements.reflectionDialog.showModal();
-  });
-
-  elements.settingsForm.addEventListener("submit", async (event) => {
-    if (event.submitter?.value === "cancel") return;
-    event.preventDefault();
-    const formData = new FormData(elements.settingsForm);
-    const nextConfig = normalizeConfig({ url: formData.get("url"), key: formData.get("key") });
-    state.config = nextConfig;
-    localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(nextConfig));
-    const connected = await connectAndLoad();
-    if (connected) elements.settingsDialog.close();
   });
 
   elements.planForm.addEventListener("submit", async (event) => {
@@ -536,8 +507,7 @@ function initialize() {
   renderAll();
   const route = location.hash.slice(1);
   if (["plan", "do", "see", "history"].includes(route)) switchView(route);
-  if (hasConfig()) connectAndLoad({ announce: false });
-  else connectAndLoad({ announce: false });
+  connectAndLoad({ announce: false });
 }
 
 initialize();

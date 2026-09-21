@@ -57,10 +57,10 @@
             <h1>계획에서 성장까지, 한 흐름으로</h1>
             <p>오늘의 계획이 더 나은 내일의 나를 만듭니다.</p>
           </div>
-          <button id="connection-button" class="connection-badge" type="button">
+          <div id="connection-status" class="connection-badge" role="status" aria-live="polite">
             <span class="status-dot"></span>
-            <span id="connection-label">Supabase 설정 필요</span>
-          </button>
+            <span id="connection-label">연결 확인 중</span>
+          </div>
         </header>
 
         <section class="journey" aria-label="Plan Do See 진행 단계">
@@ -216,19 +216,6 @@
           <label class="full">다음 행동<textarea name="next_action" rows="3" required maxlength="500"></textarea></label>
         </div>
         <div class="modal-actions"><button class="button secondary" type="button" data-close-dialog>취소</button><button class="button primary" value="default">회고 저장</button></div>
-      </form>
-    </dialog>
-
-    <dialog id="settings-dialog" class="modal settings-modal">
-      <form id="settings-form" method="dialog">
-        <div class="modal-head"><div><span class="section-kicker">DATABASE</span><h2>Supabase 연결</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="닫기">×</button></div>
-        <p class="modal-copy">프로젝트 URL과 공개용 anon key를 입력하세요. 기록 데이터는 브라우저가 아닌 Supabase에 저장됩니다.</p>
-        <div class="form-grid">
-          <label class="full">Project URL<input name="url" type="url" required placeholder="https://your-project.supabase.co" /></label>
-          <label class="full">Anon public key<textarea name="key" rows="4" required spellcheck="false"></textarea></label>
-        </div>
-        <details class="setup-help"><summary>처음 연결하는 방법</summary><ol><li>Supabase SQL Editor에서 프로젝트의 <code>supabase/schema.sql</code>을 실행합니다.</li><li>Project Settings → API에서 URL과 anon public key를 복사합니다.</li><li>여기에 붙여 넣고 연결을 확인합니다.</li></ol></details>
-        <div class="modal-actions"><button class="button secondary" type="button" data-close-dialog>취소</button><button class="button primary" value="default">연결하고 불러오기</button></div>
       </form>
     </dialog>
 

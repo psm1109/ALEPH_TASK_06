@@ -68,9 +68,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .eyebrow, .section-kicker { margin: 0 0 7px; color: var(--green); font-size: .72rem; font-weight: 800; letter-spacing: .14em; }
 .page-header h1 { margin: 0; font-size: clamp(1.9rem, 3vw, 2.55rem); line-height: 1.18; letter-spacing: -.055em; }
 .page-header p:not(.eyebrow) { margin: 10px 0 0; color: var(--muted); font-size: 1rem; }
-.connection-badge { display: inline-flex; align-items: center; gap: 9px; min-height: 42px; padding: 0 15px; border: 1px solid #d5ebe3; border-radius: 14px; color: var(--green-dark); background: #eef8f4; font-size: .87rem; font-weight: 750; cursor: pointer; white-space: nowrap; }
+.connection-badge { display: inline-flex; align-items: center; gap: 9px; min-height: 42px; padding: 0 15px; border: 1px solid #d5ebe3; border-radius: 14px; color: var(--green-dark); background: #eef8f4; font-size: .87rem; font-weight: 750; white-space: nowrap; }
 .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #e1a135; box-shadow: 0 0 0 5px rgba(225,161,53,.12); }
 .connection-badge.is-connected .status-dot { background: var(--green); box-shadow: 0 0 0 5px rgba(36,154,114,.12); }
+.connection-badge.is-error { color: #a24638; border-color: #f0d2cb; background: #fff3f0; }
+.connection-badge.is-error .status-dot { background: var(--coral); box-shadow: 0 0 0 5px rgba(239,126,108,.12); }
 
 .journey { max-width: 1420px; margin: 0 auto 28px; display: grid; grid-template-columns: auto 1fr auto 1fr auto; align-items: center; gap: 20px; }
 .journey-step { display: flex; align-items: center; gap: 14px; border: 0; background: transparent; padding: 5px 0; cursor: pointer; text-align: left; }
@@ -192,11 +194,6 @@ input, select { height: 46px; padding: 0 12px; }
 textarea { padding: 11px 12px; resize: vertical; line-height: 1.5; }
 input:focus, textarea:focus, select:focus { border-color: #73bda2; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
-.setup-help { margin-top: 17px; padding: 13px 15px; border-radius: 12px; background: #f4f7f5; color: #536176; font-size: .82rem; }
-.setup-help summary { cursor: pointer; font-weight: 800; }
-.setup-help ol { margin: 12px 0 0; padding-left: 20px; line-height: 1.7; }
-.setup-help code { padding: 2px 5px; border-radius: 5px; background: #e4ebe7; }
-
 @media (max-width: 1180px) {
   .app-shell { grid-template-columns: 210px minmax(0,1fr); }
   .sidebar { padding-inline: 12px; }

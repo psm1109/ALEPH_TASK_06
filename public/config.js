@@ -1,4 +1,4 @@
 window.__PDS_CONFIG__ = {
-  supabaseUrl: "",
-  supabaseAnonKey: "",
+  supabaseUrl: "https://eidvougocycgramikbwq.supabase.co",
+  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVpZHZvdWdvY3ljZ3JhbWlrYndxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk5MjY4ODUsImV4cCI6MjEwNTUwMjg4NX0.pXaYQT1pxwaRBkQKdzlN0jdikKC8MQvdKsnqzn1Guic",
 };
