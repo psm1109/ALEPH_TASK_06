@@ -213,7 +213,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .record-list, .version-list { display: grid; gap: 13px; }
 .linked-log-section { padding: 24px; }
 .completion-history-card { margin-top: 22px; padding: 24px; }
+.execution-list-meta { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 16px; }
+.execution-list-meta .card-description { margin: 0; }
 .linked-log-list, .completion-event-list { display: grid; gap: 10px; }
+.execution-date-group { overflow: hidden; border: 1px solid var(--line); border-radius: 15px; background: #fff; }
+.execution-date-group > summary { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 16px 18px; cursor: pointer; list-style: none; }
+.execution-date-group > summary::-webkit-details-marker { display: none; }
+.execution-date-group > summary::after { content: "⌄"; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; color: var(--green-dark); background: var(--mint); font-weight: 900; transition: transform .16s ease; }
+.execution-date-group[open] > summary::after { transform: rotate(180deg); }
+.execution-date-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.execution-date-heading strong { font-size: .9rem; }
+.execution-date-heading small { color: var(--green-dark); font-size: .72rem; font-weight: 800; }
+.execution-date-total { color: var(--ink-soft); font-size: .78rem; font-weight: 800; white-space: nowrap; }
+.execution-date-logs { display: grid; gap: 9px; padding: 0 14px 14px; }
 .linked-log-card { display: grid; grid-template-columns: minmax(180px, .8fr) minmax(0, 1.2fr) auto; gap: 16px; align-items: start; padding: 15px 16px; border: 1px solid var(--line); border-radius: 13px; background: #fbfcfb; }
 .linked-log-card h3 { margin: 0 0 5px; font-size: .9rem; }
 .linked-log-card p { margin: 0; color: var(--muted); font-size: .76rem; line-height: 1.5; }
@@ -322,6 +334,10 @@ input:focus, textarea:focus, select:focus { border-color: #73bda2; }
   .secondary-column { grid-template-columns: 1fr; }
   .workspace-head { align-items: start; flex-direction: column; }
   .workspace-head .button { width: 100%; }
+  .execution-list-meta { align-items: flex-start; }
+  .execution-date-group > summary { grid-template-columns: minmax(0, 1fr) auto; }
+  .execution-date-group > summary::after { grid-column: 2; grid-row: 1; }
+  .execution-date-total { grid-column: 1; grid-row: 2; }
   .record-card, .version-card { grid-template-columns: auto minmax(0,1fr); padding: 17px; }
   .linked-log-card { grid-template-columns: 1fr; }
   .linked-log-card .execution-actions { justify-content: flex-end; }

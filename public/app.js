@@ -256,6 +256,19 @@ function formatTimestamp(value) {
   return new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
+function formatTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ko-KR", { hour: "numeric", minute: "2-digit" }).format(date);
+}
+
+function formatExecutionDate(value) {
+  const date = parseLocalDate(value);
+  const weekday = new Intl.DateTimeFormat("ko-KR", { weekday: "short" }).format(date);
+  const todayLabel = value === toISODate(new Date()) ? " · 오늘" : "";
+  return `${formatDate(value)} (${weekday})${todayLabel}`;
+}
+
 function calculateDDay(endDate) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -412,14 +425,17 @@ function renderTasks() {
     const taskId = escapeHTML(task.id);
     const tags = (task.tags || []).map((tag) => `<span class="task-tag">#${escapeHTML(tag)}</span>`).join("");
     const overdue = isOverdue(task);
-    const executionLogs = state.taskExecutions.filter((log) => String(log.task_id) === String(task.id));
-    const linkedLogs = executionLogs.length ? `
+    const today = toISODate(new Date());
+    const todayExecutionLogs = state.taskExecutions.filter((log) =>
+      String(log.task_id) === String(task.id) && executionDate(log) === today,
+    );
+    const linkedLogs = todayExecutionLogs.length ? `
       <details class="task-linked-logs">
-        <summary>이 할 일의 실행 기록 ${executionLogs.length}건</summary>
+        <summary>오늘 실행 기록 ${todayExecutionLogs.length}건</summary>
         <div class="task-linked-log-list">
-          ${executionLogs.map((log) => `
+          ${todayExecutionLogs.map((log) => `
             <div class="task-linked-log">
-              <div><strong>${formatTimestamp(log.start_time)} → ${formatTimestamp(log.end_time)} · ${formatMinutes(log.actual_minutes)}</strong><br />
+              <div><strong>${formatTime(log.start_time)} → ${formatTime(log.end_time)} · ${formatMinutes(log.actual_minutes)}</strong><br />
               막힌 이유 · ${escapeHTML(log.blocker_reason || "없음")}</div>
               <div class="execution-actions">
                 <button class="execution-action" type="button" data-action="edit-execution" data-execution-id="${escapeHTML(log.id)}">수정</button>
@@ -473,20 +489,43 @@ function renderTaskExecutions() {
     return;
   }
 
-  list.innerHTML = state.taskExecutions.map((log) => `
-    <article class="linked-log-card">
-      <div><h3>${escapeHTML(taskTitle(log.task_id))}</h3><p>할 일 #${escapeHTML(log.task_id)}에 연결된 기록</p></div>
-      <div class="linked-log-time">
-        <span>${formatTimestamp(log.start_time)} → ${formatTimestamp(log.end_time)}</span>
-        <strong>실제 소요 ${formatMinutes(log.actual_minutes)}</strong>
-        <span>막힌 이유 · ${escapeHTML(log.blocker_reason || "없음")}</span>
-      </div>
-      <div class="execution-actions">
-        <button class="execution-action" type="button" data-action="edit-execution" data-execution-id="${escapeHTML(log.id)}">수정</button>
-        <button class="execution-action delete" type="button" data-action="delete-execution" data-execution-id="${escapeHTML(log.id)}">삭제</button>
-      </div>
-    </article>
-  `).join("");
+  const groups = new Map();
+  [...state.taskExecutions]
+    .sort((a, b) => new Date(b.start_time) - new Date(a.start_time))
+    .forEach((log) => {
+      const date = executionDate(log);
+      if (!groups.has(date)) groups.set(date, []);
+      groups.get(date).push(log);
+    });
+  const today = toISODate(new Date());
+
+  list.innerHTML = [...groups.entries()].map(([date, logs]) => {
+    const totalMinutes = logs.reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0);
+    return `
+      <details class="execution-date-group" ${date === today ? "open" : ""}>
+        <summary>
+          <span class="execution-date-heading"><strong>${formatExecutionDate(date)}</strong><small>${logs.length}건</small></span>
+          <span class="execution-date-total">총 ${formatMinutes(totalMinutes)}</span>
+        </summary>
+        <div class="execution-date-logs">
+          ${logs.map((log) => `
+            <article class="linked-log-card">
+              <div><h3>${escapeHTML(taskTitle(log.task_id))}</h3></div>
+              <div class="linked-log-time">
+                <span>${formatTime(log.start_time)} → ${formatTime(log.end_time)}</span>
+                <strong>실제 소요 ${formatMinutes(log.actual_minutes)}</strong>
+                <span>막힌 이유 · ${escapeHTML(log.blocker_reason || "없음")}</span>
+              </div>
+              <div class="execution-actions">
+                <button class="execution-action" type="button" data-action="edit-execution" data-execution-id="${escapeHTML(log.id)}">수정</button>
+                <button class="execution-action delete" type="button" data-action="delete-execution" data-execution-id="${escapeHTML(log.id)}">삭제</button>
+              </div>
+            </article>
+          `).join("")}
+        </div>
+      </details>
+    `;
+  }).join("");
 }
 
 function renderCompletionSummary() {
