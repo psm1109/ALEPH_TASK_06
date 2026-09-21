@@ -18,8 +18,20 @@
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-body { margin: 0; min-width: 320px; min-height: 100vh; color: var(--ink); background: var(--canvas); }
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  color: var(--ink);
+  background: var(--canvas);
+  user-select: none;
+  caret-color: transparent;
+}
 button, input, textarea, select { font: inherit; }
+input, textarea {
+  user-select: text;
+  caret-color: auto;
+}
 button { color: inherit; }
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible {
   outline: 3px solid rgba(36, 154, 114, 0.24);
