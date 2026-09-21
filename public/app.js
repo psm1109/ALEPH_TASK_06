@@ -13,6 +13,25 @@ const initialPlan = {
   created_at: "2026-09-21T00:00:00+09:00",
 };
 
+const initialTaskSeeds = [
+  { seed_key: "jeremy-it-lab", title: "Jeremy’s IT Lab 유튜브 강의 Day 할당량 시청", due_date: "2026-11-01", priority: "high", tags: ["강의", "유튜브"], estimated_minutes: 60 },
+  { seed_key: "lab-practice", title: "Lab 실습하기", due_date: "2026-11-01", priority: "high", tags: ["실습"], estimated_minutes: 90 },
+  { seed_key: "exam-simulator", title: "CCNA Exam Simulator 문제 풀기", due_date: "2026-11-01", priority: "high", tags: ["문제풀이"], estimated_minutes: 60 },
+  { seed_key: "anki-review", title: "오늘 배운 내용 Anki 카드로 복습하기", due_date: "2026-11-01", priority: "medium", tags: ["복습", "Anki"], estimated_minutes: 30 },
+  { seed_key: "blog-review", title: "블로그에 배운 내용을 복습할 수 있도록 글로 정리하기", due_date: "2026-11-01", priority: "medium", tags: ["복습", "블로그"], estimated_minutes: 45 },
+];
+
+const previewTasks = initialTaskSeeds.map((task, index) => ({
+  ...task,
+  id: `preview-${index + 1}`,
+  workspace_id: WORKSPACE_ID,
+  plan_version: 1,
+  is_completed: false,
+  completed_at: null,
+  created_at: initialPlan.created_at,
+  updated_at: initialPlan.created_at,
+}));
+
 const state = {
   config: readConfig(),
   connected: false,
@@ -20,6 +39,15 @@ const state = {
   versions: [initialPlan],
   activities: [],
   reflections: [],
+  tasks: previewTasks,
+  editingTaskId: null,
+  taskQuery: {
+    search: "",
+    status: "all",
+    priority: "all",
+    tag: "all",
+    sort: "due_asc",
+  },
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -32,9 +60,11 @@ const elements = {
   planDialog: $("#plan-dialog"),
   activityDialog: $("#activity-dialog"),
   reflectionDialog: $("#reflection-dialog"),
+  taskDialog: $("#task-dialog"),
   planForm: $("#plan-form"),
   activityForm: $("#activity-form"),
   reflectionForm: $("#reflection-form"),
+  taskForm: $("#task-form"),
 };
 
 function readConfig() {
@@ -65,7 +95,7 @@ async function supabaseRequest(table, { method = "GET", query = "", body } = {})
     headers: {
       apikey: state.config.publishableKey,
       "Content-Type": "application/json",
-      Prefer: method === "POST" ? "return=representation" : "return=minimal",
+      Prefer: ["POST", "PATCH"].includes(method) ? "return=representation" : "return=minimal",
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -115,18 +145,34 @@ async function connectAndLoad({ announce = true } = {}) {
       });
     }
 
-    const [activities, reflections] = await Promise.all([
+    let [activities, reflections, tasks] = await Promise.all([
       supabaseRequest("activity_logs", {
         query: `workspace_id=eq.${WORKSPACE_ID}&order=activity_date.desc,created_at.desc`,
       }),
       supabaseRequest("reflections", {
         query: `workspace_id=eq.${WORKSPACE_ID}&order=reflection_date.desc,created_at.desc`,
       }),
+      supabaseRequest("tasks", {
+        query: `workspace_id=eq.${WORKSPACE_ID}&order=created_at.asc`,
+      }),
     ]);
+
+    if (!tasks.length) {
+      const latestPlanVersion = versions[0]?.version || 1;
+      tasks = await supabaseRequest("tasks", {
+        method: "POST",
+        body: initialTaskSeeds.map((task) => ({
+          ...task,
+          workspace_id: WORKSPACE_ID,
+          plan_version: latestPlanVersion,
+        })),
+      });
+    }
 
     state.versions = versions.sort((a, b) => b.version - a.version);
     state.activities = activities;
     state.reflections = reflections;
+    state.tasks = tasks;
     state.connected = true;
     setConnectionState("connected", "Supabase 저장됨");
     if (announce) showNotice("Supabase에서 최신 기록을 불러왔습니다.", "success", 2800);
@@ -217,6 +263,7 @@ function renderPlan() {
   const plan = currentPlan();
   const { completedDays, percent } = getProgress(plan);
   $("#goal-title").textContent = plan.title;
+  $("#task-plan-title").textContent = `${plan.title} 할 일`;
   $("#d-day").textContent = calculateDDay(plan.end_date);
   $("#date-range").textContent = `${formatDate(plan.start_date)} – ${formatDate(plan.end_date)}`;
   $("#success-criteria").textContent = plan.success_criteria;
@@ -264,6 +311,121 @@ function renderWeek() {
   });
 
   $("#week-empty").hidden = weekEntryCount > 0;
+}
+
+function renderTaskTagFilter() {
+  const select = $("#task-tag-filter");
+  const tags = [...new Set(state.tasks.flatMap((task) => Array.isArray(task.tags) ? task.tags : []))]
+    .sort((a, b) => a.localeCompare(b, "ko"));
+  select.innerHTML = '<option value="all">전체 태그</option>' + tags
+    .map((tag) => `<option value="${escapeHTML(tag)}">${escapeHTML(tag)}</option>`)
+    .join("");
+  if (tags.includes(state.taskQuery.tag)) select.value = state.taskQuery.tag;
+  else {
+    state.taskQuery.tag = "all";
+    select.value = "all";
+  }
+}
+
+function filteredAndSortedTasks() {
+  const query = state.taskQuery;
+  const search = query.search.trim().toLocaleLowerCase("ko");
+  const priorityOrder = { high: 0, medium: 1, low: 2 };
+  const comparators = {
+    due_asc: (a, b) => String(a.due_date).localeCompare(String(b.due_date)),
+    priority_desc: (a, b) => priorityOrder[a.priority] - priorityOrder[b.priority],
+    created_desc: (a, b) => new Date(b.created_at) - new Date(a.created_at),
+    estimated_asc: (a, b) => Number(a.estimated_minutes) - Number(b.estimated_minutes),
+    estimated_desc: (a, b) => Number(b.estimated_minutes) - Number(a.estimated_minutes),
+    title_asc: (a, b) => a.title.localeCompare(b.title, "ko"),
+  };
+
+  return state.tasks
+    .filter((task) => {
+      const searchable = `${task.title} ${(task.tags || []).join(" ")}`.toLocaleLowerCase("ko");
+      if (search && !searchable.includes(search)) return false;
+      if (query.status === "active" && task.is_completed) return false;
+      if (query.status === "completed" && !task.is_completed) return false;
+      if (query.priority !== "all" && task.priority !== query.priority) return false;
+      if (query.tag !== "all" && !(task.tags || []).includes(query.tag)) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const primary = (comparators[query.sort] || comparators.due_asc)(a, b);
+      return primary || Number(a.id) - Number(b.id) || String(a.id).localeCompare(String(b.id));
+    });
+}
+
+function formatMinutes(value) {
+  const minutes = Number(value);
+  if (minutes < 60) return `${minutes}분`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours}시간 ${rest}분` : `${hours}시간`;
+}
+
+function isOverdue(task) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return !task.is_completed && parseLocalDate(task.due_date) < today;
+}
+
+function renderTasks() {
+  renderTaskTagFilter();
+  const tasks = filteredAndSortedTasks();
+  const completedCount = state.tasks.filter((task) => task.is_completed).length;
+  const sortLabels = {
+    due_asc: "마감 임박순",
+    priority_desc: "우선순위 높은 순",
+    created_desc: "최근 등록순",
+    estimated_asc: "예상 시간 짧은 순",
+    estimated_desc: "예상 시간 긴 순",
+    title_asc: "이름 가나다순",
+  };
+
+  $("#task-progress-count").textContent = `${completedCount} / ${state.tasks.length} 완료`;
+  $("#task-result-count").textContent = `검색 결과 ${tasks.length}개`;
+  $("#active-sort-label").textContent = sortLabels[state.taskQuery.sort];
+  $("#task-sort").value = state.taskQuery.sort;
+  $("#task-status-filter").value = state.taskQuery.status;
+  $("#task-priority-filter").value = state.taskQuery.priority;
+
+  const list = $("#task-list");
+  if (!tasks.length) {
+    list.innerHTML = '<div class="task-empty"><strong>조건에 맞는 할 일이 없어요</strong><p>검색어나 필터 조건을 바꿔 보세요.</p></div>';
+    return;
+  }
+
+  list.innerHTML = tasks.map((task) => {
+    const taskId = escapeHTML(task.id);
+    const tags = (task.tags || []).map((tag) => `<span class="task-tag">#${escapeHTML(tag)}</span>`).join("");
+    const overdue = isOverdue(task);
+    return `
+      <article class="task-item${task.is_completed ? " is-completed" : ""}">
+        <input
+          class="task-check"
+          type="checkbox"
+          data-action="toggle-task"
+          data-task-id="${taskId}"
+          aria-label="${task.is_completed ? "진행 중으로 되돌리기" : "완료로 변경"}: ${escapeHTML(task.title)}"
+          ${task.is_completed ? "checked" : ""}
+        />
+        <div class="task-main">
+          <h3 class="task-title">${escapeHTML(task.title)}</h3>
+          <div class="task-meta">
+            <span class="priority ${task.priority}">${priorityLabel(task.priority)}</span>
+            <span class="${overdue ? "due-overdue" : ""}">▣ ${formatDate(task.due_date)}${overdue ? " · 지남" : ""}</span>
+            <span>◷ ${formatMinutes(task.estimated_minutes)}</span>
+            ${tags}
+          </div>
+        </div>
+        <div class="task-actions">
+          <button class="task-icon-button" type="button" data-action="edit-task" data-task-id="${taskId}" aria-label="할 일 수정: ${escapeHTML(task.title)}">수정</button>
+          <button class="task-icon-button delete" type="button" data-action="delete-task" data-task-id="${taskId}" aria-label="할 일 삭제: ${escapeHTML(task.title)}">삭제</button>
+        </div>
+      </article>
+    `;
+  }).join("");
 }
 
 function renderTimeline() {
@@ -354,6 +516,7 @@ function escapeHTML(value) {
 function renderAll() {
   renderPlan();
   renderWeek();
+  renderTasks();
   renderTimeline();
   renderActivities();
   renderReflections();
@@ -378,6 +541,75 @@ function fillPlanForm() {
   elements.planForm.elements.priority.value = plan.priority;
   elements.planForm.elements.expected_days.value = plan.expected_days;
   elements.planForm.elements.success_criteria.value = plan.success_criteria;
+}
+
+function findTask(taskId) {
+  return state.tasks.find((task) => String(task.id) === String(taskId));
+}
+
+function parseTags(value) {
+  return [...new Set(String(value || "")
+    .split(",")
+    .map((tag) => tag.trim().replace(/^#/, ""))
+    .filter(Boolean))]
+    .slice(0, 10);
+}
+
+function openTaskDialog(task = null) {
+  if (!requireConnection()) return;
+  state.editingTaskId = task?.id ?? null;
+  elements.taskForm.reset();
+  $("#task-dialog-title").textContent = task ? "할 일 수정" : "할 일 만들기";
+  $("#save-task-button").textContent = task ? "변경 내용 저장" : "할 일 저장";
+  elements.taskForm.elements.title.value = task?.title || "";
+  elements.taskForm.elements.due_date.value = task?.due_date || currentPlan().end_date;
+  elements.taskForm.elements.priority.value = task?.priority || "medium";
+  elements.taskForm.elements.estimated_minutes.value = task?.estimated_minutes || 60;
+  elements.taskForm.elements.tags.value = (task?.tags || []).join(", ");
+  elements.taskDialog.showModal();
+}
+
+async function updateTask(taskId, changes, successMessage) {
+  setLoading(true);
+  try {
+    const [saved] = await supabaseRequest("tasks", {
+      method: "PATCH",
+      query: `id=eq.${encodeURIComponent(taskId)}&workspace_id=eq.${WORKSPACE_ID}`,
+      body: { ...changes, updated_at: new Date().toISOString() },
+    });
+    if (!saved) throw new Error("변경된 할 일을 찾지 못했습니다.");
+    state.tasks = state.tasks.map((task) => String(task.id) === String(taskId) ? saved : task);
+    renderTasks();
+    showNotice(successMessage, "success", 2600);
+    return saved;
+  } catch (error) {
+    renderTasks();
+    showNotice(`할 일을 변경하지 못했습니다. ${error.message}`, "error");
+    return null;
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function deleteTask(taskId) {
+  const task = findTask(taskId);
+  if (!task || !requireConnection()) return;
+  if (!window.confirm(`“${task.title}” 할 일을 삭제할까요?\n삭제한 할 일은 되돌릴 수 없습니다.`)) return;
+
+  setLoading(true);
+  try {
+    await supabaseRequest("tasks", {
+      method: "DELETE",
+      query: `id=eq.${encodeURIComponent(taskId)}&workspace_id=eq.${WORKSPACE_ID}`,
+    });
+    state.tasks = state.tasks.filter((item) => String(item.id) !== String(taskId));
+    renderTasks();
+    showNotice("할 일을 삭제했습니다.", "success", 2600);
+  } catch (error) {
+    showNotice(`할 일을 삭제하지 못했습니다. ${error.message}`, "error");
+  } finally {
+    setLoading(false);
+  }
 }
 
 function requireConnection() {
@@ -409,6 +641,91 @@ function bindEvents() {
     elements.reflectionForm.reset();
     elements.reflectionForm.elements.reflection_date.value = toISODate(new Date());
     elements.reflectionDialog.showModal();
+  });
+  $("#add-task-button").addEventListener("click", () => openTaskDialog());
+
+  $("#task-search").addEventListener("input", (event) => {
+    state.taskQuery.search = event.target.value;
+    renderTasks();
+  });
+  $("#task-status-filter").addEventListener("change", (event) => {
+    state.taskQuery.status = event.target.value;
+    renderTasks();
+  });
+  $("#task-priority-filter").addEventListener("change", (event) => {
+    state.taskQuery.priority = event.target.value;
+    renderTasks();
+  });
+  $("#task-tag-filter").addEventListener("change", (event) => {
+    state.taskQuery.tag = event.target.value;
+    renderTasks();
+  });
+  $("#task-sort").addEventListener("change", (event) => {
+    state.taskQuery.sort = event.target.value;
+    renderTasks();
+  });
+
+  $("#task-list").addEventListener("change", async (event) => {
+    const checkbox = event.target.closest('[data-action="toggle-task"]');
+    if (!checkbox) return;
+    const task = findTask(checkbox.dataset.taskId);
+    if (!task || !requireConnection()) {
+      renderTasks();
+      return;
+    }
+    const completed = checkbox.checked;
+    await updateTask(task.id, {
+      is_completed: completed,
+      completed_at: completed ? new Date().toISOString() : null,
+    }, completed ? "할 일을 완료로 변경했습니다." : "할 일을 다시 진행 중으로 되돌렸습니다.");
+  });
+
+  $("#task-list").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-action]");
+    if (!button || button.matches('input[type="checkbox"]')) return;
+    const task = findTask(button.dataset.taskId);
+    if (button.dataset.action === "edit-task" && task) openTaskDialog(task);
+    if (button.dataset.action === "delete-task") void deleteTask(button.dataset.taskId);
+  });
+
+  elements.taskForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!requireConnection()) return;
+    const data = Object.fromEntries(new FormData(elements.taskForm));
+    const payload = {
+      title: data.title.trim(),
+      due_date: data.due_date,
+      priority: data.priority,
+      tags: parseTags(data.tags),
+      estimated_minutes: Number(data.estimated_minutes),
+    };
+
+    if (state.editingTaskId !== null) {
+      const saved = await updateTask(state.editingTaskId, payload, "할 일 내용을 수정했습니다.");
+      if (saved) elements.taskDialog.close();
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const [saved] = await supabaseRequest("tasks", {
+        method: "POST",
+        body: [{
+          ...payload,
+          workspace_id: WORKSPACE_ID,
+          plan_version: currentPlan().version,
+          is_completed: false,
+        }],
+      });
+      state.tasks.push(saved);
+      elements.taskDialog.close();
+      renderTasks();
+      showNotice("새 할 일을 만들었습니다.", "success", 2600);
+    } catch (error) {
+      showNotice(`할 일을 만들지 못했습니다. ${error.message}`, "error");
+    } finally {
+      setLoading(false);
+    }
   });
 
   elements.planForm.addEventListener("submit", async (event) => {

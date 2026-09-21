@@ -132,6 +132,59 @@
                   <span><strong>아직 실행 기록이 없어요</strong><small>첫 학습을 기록해 보세요</small></span>
                 </button>
               </article>
+
+              <article class="card task-card">
+                <div class="task-card-head">
+                  <div>
+                    <span class="section-kicker">PLAN TASKS</span>
+                    <h2 id="task-plan-title">CCNA 취득 할 일</h2>
+                    <p><strong id="task-progress-count">0 / 5 완료</strong><span id="task-result-count">할 일 5개</span></p>
+                  </div>
+                  <button id="add-task-button" class="button primary" type="button">＋ 할 일 만들기</button>
+                </div>
+
+                <div class="task-toolbar">
+                  <label class="task-search">
+                    <span aria-hidden="true">⌕</span>
+                    <input id="task-search" type="search" placeholder="할 일 또는 태그 검색" aria-label="할 일 검색" />
+                  </label>
+                  <div class="task-filters">
+                    <label>상태
+                      <select id="task-status-filter">
+                        <option value="all">전체 상태</option>
+                        <option value="active">진행 중</option>
+                        <option value="completed">완료</option>
+                      </select>
+                    </label>
+                    <label>우선순위
+                      <select id="task-priority-filter">
+                        <option value="all">전체 우선순위</option>
+                        <option value="high">높음</option>
+                        <option value="medium">보통</option>
+                        <option value="low">낮음</option>
+                      </select>
+                    </label>
+                    <label>태그
+                      <select id="task-tag-filter"><option value="all">전체 태그</option></select>
+                    </label>
+                    <label>정렬 기준
+                      <select id="task-sort">
+                        <option value="due_asc">마감 임박순</option>
+                        <option value="priority_desc">우선순위 높은 순</option>
+                        <option value="created_desc">최근 등록순</option>
+                        <option value="estimated_asc">예상 시간 짧은 순</option>
+                        <option value="estimated_desc">예상 시간 긴 순</option>
+                        <option value="title_asc">이름 가나다순</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="active-sort" aria-live="polite">
+                  <span>↕</span> 현재 정렬: <strong id="active-sort-label">마감 임박순</strong>
+                </div>
+                <div id="task-list" class="task-list"></div>
+              </article>
             </div>
 
             <aside class="secondary-column">
@@ -216,6 +269,27 @@
           <label class="full">다음 행동<textarea name="next_action" rows="3" required maxlength="500"></textarea></label>
         </div>
         <div class="modal-actions"><button class="button secondary" type="button" data-close-dialog>취소</button><button class="button primary" value="default">회고 저장</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="task-dialog" class="modal">
+      <form id="task-form" method="dialog">
+        <div class="modal-head">
+          <div><span class="section-kicker">PLAN TASK</span><h2 id="task-dialog-title">할 일 만들기</h2></div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="닫기">×</button>
+        </div>
+        <p class="modal-copy">CCNA 취득 계획에 연결할 실행 항목을 입력하세요.</p>
+        <div class="form-grid">
+          <label class="full">할 일 내용<input name="title" required maxlength="160" /></label>
+          <label>마감일<input name="due_date" type="date" required /></label>
+          <label>우선순위<select name="priority"><option value="high">높음</option><option value="medium">보통</option><option value="low">낮음</option></select></label>
+          <label>예상 시간(분)<input name="estimated_minutes" type="number" min="1" max="10080" required value="60" /></label>
+          <label>태그<input name="tags" maxlength="160" placeholder="강의, 복습처럼 쉼표로 구분" /></label>
+        </div>
+        <div class="modal-actions">
+          <button class="button secondary" type="button" data-close-dialog>취소</button>
+          <button id="save-task-button" class="button primary" value="default">할 일 저장</button>
+        </div>
       </form>
     </dialog>
 
