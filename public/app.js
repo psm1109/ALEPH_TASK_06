@@ -40,7 +40,11 @@ const state = {
   activities: [],
   reflections: [],
   tasks: previewTasks,
+  taskExecutions: [],
+  completionEvents: [],
   editingTaskId: null,
+  executingTaskId: null,
+  pendingTaskIds: new Set(),
   taskQuery: {
     search: "",
     status: "all",
@@ -61,10 +65,12 @@ const elements = {
   activityDialog: $("#activity-dialog"),
   reflectionDialog: $("#reflection-dialog"),
   taskDialog: $("#task-dialog"),
+  taskExecutionDialog: $("#task-execution-dialog"),
   planForm: $("#plan-form"),
   activityForm: $("#activity-form"),
   reflectionForm: $("#reflection-form"),
   taskForm: $("#task-form"),
+  taskExecutionForm: $("#task-execution-form"),
 };
 
 function readConfig() {
@@ -145,7 +151,7 @@ async function connectAndLoad({ announce = true } = {}) {
       });
     }
 
-    let [activities, reflections, tasks] = await Promise.all([
+    let [activities, reflections, tasks, taskExecutions, completionEvents] = await Promise.all([
       supabaseRequest("activity_logs", {
         query: `workspace_id=eq.${WORKSPACE_ID}&order=activity_date.desc,created_at.desc`,
       }),
@@ -154,6 +160,12 @@ async function connectAndLoad({ announce = true } = {}) {
       }),
       supabaseRequest("tasks", {
         query: `workspace_id=eq.${WORKSPACE_ID}&order=created_at.asc`,
+      }),
+      supabaseRequest("task_execution_logs", {
+        query: `workspace_id=eq.${WORKSPACE_ID}&order=start_time.desc`,
+      }),
+      supabaseRequest("task_completion_events", {
+        query: `workspace_id=eq.${WORKSPACE_ID}&order=completed_at.desc`,
       }),
     ]);
 
@@ -173,6 +185,8 @@ async function connectAndLoad({ announce = true } = {}) {
     state.activities = activities;
     state.reflections = reflections;
     state.tasks = tasks;
+    state.taskExecutions = taskExecutions;
+    state.completionEvents = completionEvents;
     state.connected = true;
     setConnectionState("connected", "Supabase 저장됨");
     if (announce) showNotice("Supabase에서 최신 기록을 불러왔습니다.", "success", 2800);
@@ -400,6 +414,20 @@ function renderTasks() {
     const taskId = escapeHTML(task.id);
     const tags = (task.tags || []).map((tag) => `<span class="task-tag">#${escapeHTML(tag)}</span>`).join("");
     const overdue = isOverdue(task);
+    const executionLogs = state.taskExecutions.filter((log) => String(log.task_id) === String(task.id));
+    const linkedLogs = executionLogs.length ? `
+      <details class="task-linked-logs">
+        <summary>이 할 일의 실행 기록 ${executionLogs.length}건</summary>
+        <div class="task-linked-log-list">
+          ${executionLogs.map((log) => `
+            <div class="task-linked-log">
+              <strong>${formatTimestamp(log.start_time)} → ${formatTimestamp(log.end_time)} · ${formatMinutes(log.actual_minutes)}</strong><br />
+              막힌 이유 · ${escapeHTML(log.blocker_reason || "없음")}
+            </div>
+          `).join("")}
+        </div>
+      </details>
+    ` : "";
     return `
       <article class="task-item${task.is_completed ? " is-completed" : ""}">
         <input
@@ -409,6 +437,7 @@ function renderTasks() {
           data-task-id="${taskId}"
           aria-label="${task.is_completed ? "진행 중으로 되돌리기" : "완료로 변경"}: ${escapeHTML(task.title)}"
           ${task.is_completed ? "checked" : ""}
+          ${state.pendingTaskIds.has(String(task.id)) ? "disabled" : ""}
         />
         <div class="task-main">
           <h3 class="task-title">${escapeHTML(task.title)}</h3>
@@ -420,12 +449,54 @@ function renderTasks() {
           </div>
         </div>
         <div class="task-actions">
+          <button class="task-icon-button record" type="button" data-action="record-execution" data-task-id="${taskId}" aria-label="실행 기록 남기기: ${escapeHTML(task.title)}">기록</button>
           <button class="task-icon-button" type="button" data-action="edit-task" data-task-id="${taskId}" aria-label="할 일 수정: ${escapeHTML(task.title)}">수정</button>
           <button class="task-icon-button delete" type="button" data-action="delete-task" data-task-id="${taskId}" aria-label="할 일 삭제: ${escapeHTML(task.title)}">삭제</button>
         </div>
+        ${linkedLogs}
       </article>
     `;
   }).join("");
+}
+
+function taskTitle(taskId) {
+  return findTask(taskId)?.title || "삭제된 할 일";
+}
+
+function renderTaskExecutions() {
+  $("#execution-log-count").textContent = `${state.taskExecutions.length}건`;
+  const list = $("#all-task-execution-list");
+  if (!state.taskExecutions.length) {
+    list.innerHTML = '<div class="task-empty"><strong>아직 할 일 실행 기록이 없어요</strong><p>할 일의 ‘기록’ 버튼에서 실제 실행 시간을 남겨보세요.</p></div>';
+    return;
+  }
+
+  list.innerHTML = state.taskExecutions.map((log) => `
+    <article class="linked-log-card">
+      <div><h3>${escapeHTML(taskTitle(log.task_id))}</h3><p>할 일 #${escapeHTML(log.task_id)}에 연결된 기록</p></div>
+      <div class="linked-log-time">
+        <span>${formatTimestamp(log.start_time)} → ${formatTimestamp(log.end_time)}</span>
+        <strong>실제 소요 ${formatMinutes(log.actual_minutes)}</strong>
+        <span>막힌 이유 · ${escapeHTML(log.blocker_reason || "없음")}</span>
+      </div>
+    </article>
+  `).join("");
+}
+
+function renderCompletionSummary() {
+  const totalMinutes = state.taskExecutions.reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0);
+  $("#see-completion-count").textContent = state.completionEvents.length;
+  $("#see-execution-count").textContent = state.taskExecutions.length;
+  $("#see-actual-time").textContent = formatMinutes(totalMinutes || 0);
+
+  const list = $("#completion-event-list");
+  if (!state.completionEvents.length) {
+    list.innerHTML = '<div class="task-empty"><strong>아직 완료 기록이 없어요</strong><p>할 일을 완료하면 항목별로 한 번만 집계됩니다.</p></div>';
+    return;
+  }
+  list.innerHTML = state.completionEvents.map((event) => `
+    <div class="completion-event"><strong>✓ ${escapeHTML(taskTitle(event.task_id))}</strong><time>${formatTimestamp(event.completed_at)}</time></div>
+  `).join("");
 }
 
 function renderTimeline() {
@@ -517,6 +588,8 @@ function renderAll() {
   renderPlan();
   renderWeek();
   renderTasks();
+  renderTaskExecutions();
+  renderCompletionSummary();
   renderTimeline();
   renderActivities();
   renderReflections();
@@ -569,6 +642,43 @@ function openTaskDialog(task = null) {
   elements.taskDialog.showModal();
 }
 
+function toDateTimeLocalValue(date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+function executionMinutesFromForm() {
+  const start = new Date(elements.taskExecutionForm.elements.start_time.value);
+  const end = new Date(elements.taskExecutionForm.elements.end_time.value);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return 0;
+  return Math.max(1, Math.round((end - start) / 60000));
+}
+
+function updateExecutionDurationPreview() {
+  const minutes = executionMinutesFromForm();
+  elements.taskExecutionForm.elements.actual_minutes.value = minutes ? formatMinutes(minutes) : "시간을 확인해 주세요";
+}
+
+function openTaskExecutionDialog(task) {
+  if (!task || !requireConnection()) return;
+  state.executingTaskId = task.id;
+  elements.taskExecutionForm.reset();
+  const end = new Date();
+  const start = new Date(end.getTime() - 60 * 60000);
+  elements.taskExecutionForm.elements.start_time.value = toDateTimeLocalValue(start);
+  elements.taskExecutionForm.elements.end_time.value = toDateTimeLocalValue(end);
+  $("#execution-task-title").textContent = `“${task.title}”에 연결되는 기록입니다.`;
+  updateExecutionDurationPreview();
+  elements.taskExecutionDialog.showModal();
+}
+
+async function refreshCompletionEvents() {
+  state.completionEvents = await supabaseRequest("task_completion_events", {
+    query: `workspace_id=eq.${WORKSPACE_ID}&order=completed_at.desc`,
+  });
+  renderCompletionSummary();
+}
+
 async function updateTask(taskId, changes, successMessage) {
   setLoading(true);
   try {
@@ -603,7 +713,9 @@ async function deleteTask(taskId) {
       query: `id=eq.${encodeURIComponent(taskId)}&workspace_id=eq.${WORKSPACE_ID}`,
     });
     state.tasks = state.tasks.filter((item) => String(item.id) !== String(taskId));
-    renderTasks();
+    state.taskExecutions = state.taskExecutions.filter((log) => String(log.task_id) !== String(taskId));
+    state.completionEvents = state.completionEvents.filter((event) => String(event.task_id) !== String(taskId));
+    renderAll();
     showNotice("할 일을 삭제했습니다.", "success", 2600);
   } catch (error) {
     showNotice(`할 일을 삭제하지 못했습니다. ${error.message}`, "error");
@@ -673,17 +785,35 @@ function bindEvents() {
       renderTasks();
       return;
     }
+    const pendingId = String(task.id);
+    if (state.pendingTaskIds.has(pendingId)) {
+      renderTasks();
+      return;
+    }
+    state.pendingTaskIds.add(pendingId);
+    renderTasks();
     const completed = checkbox.checked;
-    await updateTask(task.id, {
-      is_completed: completed,
-      completed_at: completed ? new Date().toISOString() : null,
-    }, completed ? "할 일을 완료로 변경했습니다." : "할 일을 다시 진행 중으로 되돌렸습니다.");
+    try {
+      const saved = await updateTask(task.id, {
+        is_completed: completed,
+        completed_at: completed ? new Date().toISOString() : null,
+      }, completed ? "할 일을 완료로 변경했습니다." : "할 일을 다시 진행 중으로 되돌렸습니다.");
+      if (saved && completed) await refreshCompletionEvents();
+    } catch (error) {
+      showNotice(`완료 집계를 불러오지 못했습니다. ${error.message}`, "error");
+    } finally {
+      window.setTimeout(() => {
+        state.pendingTaskIds.delete(pendingId);
+        renderTasks();
+      }, 700);
+    }
   });
 
   $("#task-list").addEventListener("click", (event) => {
     const button = event.target.closest("[data-action]");
     if (!button || button.matches('input[type="checkbox"]')) return;
     const task = findTask(button.dataset.taskId);
+    if (button.dataset.action === "record-execution" && task) openTaskExecutionDialog(task);
     if (button.dataset.action === "edit-task" && task) openTaskDialog(task);
     if (button.dataset.action === "delete-task") void deleteTask(button.dataset.taskId);
   });
@@ -723,6 +853,51 @@ function bindEvents() {
       showNotice("새 할 일을 만들었습니다.", "success", 2600);
     } catch (error) {
       showNotice(`할 일을 만들지 못했습니다. ${error.message}`, "error");
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  ["start_time", "end_time"].forEach((name) => {
+    elements.taskExecutionForm.elements[name].addEventListener("input", updateExecutionDurationPreview);
+  });
+
+  elements.taskExecutionForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!requireConnection()) return;
+    const task = findTask(state.executingTaskId);
+    const minutes = executionMinutesFromForm();
+    if (!task || !minutes) {
+      showNotice("끝난 시각은 시작 시각보다 뒤여야 합니다.", "error");
+      return;
+    }
+
+    const originalPlanSnapshot = JSON.stringify(currentPlan());
+    const data = Object.fromEntries(new FormData(elements.taskExecutionForm));
+    setLoading(true);
+    try {
+      const [saved] = await supabaseRequest("task_execution_logs", {
+        method: "POST",
+        body: [{
+          workspace_id: WORKSPACE_ID,
+          task_id: task.id,
+          start_time: new Date(data.start_time).toISOString(),
+          end_time: new Date(data.end_time).toISOString(),
+          actual_minutes: minutes,
+          blocker_reason: data.blocker_reason.trim(),
+        }],
+      });
+      if (JSON.stringify(currentPlan()) !== originalPlanSnapshot) {
+        throw new Error("원래 계획 값이 변경되어 저장을 중단했습니다.");
+      }
+      state.taskExecutions.unshift(saved);
+      elements.taskExecutionDialog.close();
+      renderTasks();
+      renderTaskExecutions();
+      renderCompletionSummary();
+      showNotice("실행 기록을 저장했습니다. 원래 계획 값은 그대로 유지됩니다.", "success", 3600);
+    } catch (error) {
+      showNotice(`실행 기록을 저장하지 못했습니다. ${error.message}`, "error");
     } finally {
       setLoading(false);
     }
