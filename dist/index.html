@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="계획하고, 실행하고, 돌아보는 과정을 하나로 연결하는 PDS 다이어리"
+    />
+    <meta name="theme-color" content="#f7f8f5" />
+    <title>PDS Diary · Plan Do See</title>
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%2318273f'/%3E%3Cpath d='M32 48V29' stroke='%23fff' stroke-width='5' stroke-linecap='round'/%3E%3Cpath d='M31 31C20 31 13 25 13 14c11 0 18 6 18 17Z' fill='%2353b995'/%3E%3Cpath d='M34 26c1-9 7-14 17-14 0 10-6 16-17 16Z' fill='%2397dcc2'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./config.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="주요 메뉴">
+        <a class="brand" href="#plan" aria-label="PDS Diary 홈">
+          <span class="brand-mark" aria-hidden="true"><i></i><b></b></span>
+          <span>PDS Diary</span>
+        </a>
+
+        <nav class="side-nav">
+          <button class="nav-item is-active" data-view="plan" type="button">
+            <span aria-hidden="true">⌂</span><strong>오늘</strong>
+          </button>
+          <button class="nav-item" data-view="plan" type="button">
+            <span aria-hidden="true">□</span><strong>계획 <small>Plan</small></strong>
+          </button>
+          <button class="nav-item" data-view="do" type="button">
+            <span aria-hidden="true">▷</span><strong>실행 <small>Do</small></strong>
+          </button>
+          <button class="nav-item" data-view="see" type="button">
+            <span aria-hidden="true">▥</span><strong>돌아보기 <small>See</small></strong>
+          </button>
+          <div class="nav-divider"></div>
+          <button class="nav-item" data-view="history" type="button">
+            <span aria-hidden="true">▤</span><strong>계획 기록</strong>
+          </button>
+        </nav>
+
+        <div class="side-quote" aria-hidden="true">
+          <span class="mini-sprout"></span>
+          <p>작은 계획이<br />큰 변화를 만듭니다.</p>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">PLAN · DO · SEE</p>
+            <h1>계획에서 성장까지, 한 흐름으로</h1>
+            <p>오늘의 계획이 더 나은 내일의 나를 만듭니다.</p>
+          </div>
+          <button id="connection-button" class="connection-badge" type="button">
+            <span class="status-dot"></span>
+            <span id="connection-label">Supabase 설정 필요</span>
+          </button>
+        </header>
+
+        <section class="journey" aria-label="Plan Do See 진행 단계">
+          <button class="journey-step is-active" data-view="plan" type="button">
+            <span>1</span>
+            <div><strong>Plan 계획하기</strong><small>목표를 세우고 계획을 만듭니다</small></div>
+          </button>
+          <span class="journey-line"></span>
+          <button class="journey-step" data-view="do" type="button">
+            <span>2</span>
+            <div><strong>Do 실행하기</strong><small>오늘의 행동으로 나아갑니다</small></div>
+          </button>
+          <span class="journey-line"></span>
+          <button class="journey-step" data-view="see" type="button">
+            <span>3</span>
+            <div><strong>See 돌아보기</strong><small>과정을 돌아보고 배웁니다</small></div>
+          </button>
+        </section>
+
+        <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+        <section id="plan-view" class="view is-active" aria-label="현재 계획">
+          <div class="dashboard-grid">
+            <div class="primary-column">
+              <article class="card plan-card">
+                <div class="card-heading">
+                  <div>
+                    <span class="section-kicker">CURRENT PLAN</span>
+                    <h2>현재 계획</h2>
+                  </div>
+                  <span id="plan-version-chip" class="version-chip">v1</span>
+                </div>
+
+                <div class="plan-body">
+                  <div class="progress-block">
+                    <div class="progress-ring" id="progress-ring" style="--progress: 0">
+                      <div><strong id="progress-percent">0%</strong><small>진행률</small></div>
+                    </div>
+                    <p id="progress-caption">아직 시작하지 않았어요.<br />첫 걸음을 내디뎌요.</p>
+                  </div>
+
+                  <div class="plan-details">
+                    <div class="goal-title-row">
+                      <h3 id="goal-title">CCNA 취득</h3>
+                      <span class="deadline-badge" id="d-day">D-41</span>
+                    </div>
+                    <dl class="detail-grid">
+                      <div><dt><i>▣</i> 기간</dt><dd id="date-range">2026.09.21 – 2026.11.01</dd></div>
+                      <div><dt><i>⚑</i> 우선순위</dt><dd><span id="priority" class="priority high">높음</span></dd></div>
+                      <div><dt><i>◎</i> 성공 기준</dt><dd id="success-criteria">CCNA 자격증 취득</dd></div>
+                      <div><dt><i>◷</i> 예상 시간</dt><dd id="expected-days">40일</dd></div>
+                    </dl>
+                    <div class="plan-actions">
+                      <button id="edit-plan-button" class="button secondary" type="button">✎ 계획 수정</button>
+                      <button class="button primary" data-open-activity type="button">▷ 실행 기록 남기기</button>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="card week-card">
+                <div class="card-heading compact">
+                  <div><span class="section-kicker">THIS WEEK</span><h2>이번 주 학습 기록</h2></div>
+                  <span id="week-range" class="muted"></span>
+                </div>
+                <div id="week-grid" class="week-grid"></div>
+                <button id="week-empty" class="empty-action" data-open-activity type="button">
+                  <span aria-hidden="true">▧</span>
+                  <span><strong>아직 실행 기록이 없어요</strong><small>첫 학습을 기록해 보세요</small></span>
+                </button>
+              </article>
+            </div>
+
+            <aside class="secondary-column">
+              <article class="card history-card">
+                <div class="card-heading compact">
+                  <div><span class="section-kicker">PLAN ARCHIVE</span><h2>변경 이력</h2></div>
+                </div>
+                <p class="card-description">수정 전 계획은 안전하게 보관돼요.</p>
+                <div id="history-timeline" class="timeline"></div>
+                <button class="text-button" data-view="history" type="button">전체 기록 보기 <span>→</span></button>
+              </article>
+
+              <article class="card growth-card">
+                <span class="large-sprout" aria-hidden="true"></span>
+                <blockquote>“오늘의 기록이<br />내일의 성장을 만듭니다.”</blockquote>
+                <p>꾸준히 쌓아가는 순간,<br />목표는 현실이 됩니다.</p>
+              </article>
+            </aside>
+          </div>
+        </section>
+
+        <section id="do-view" class="view" aria-label="실행 기록">
+          <div class="workspace-head">
+            <div><span class="section-kicker">DO</span><h2>오늘의 실행</h2><p>계획을 실제 행동으로 옮긴 순간을 남겨보세요.</p></div>
+            <button class="button primary" data-open-activity type="button">＋ 실행 기록</button>
+          </div>
+          <div id="activity-list" class="record-list"></div>
+        </section>
+
+        <section id="see-view" class="view" aria-label="돌아보기">
+          <div class="workspace-head">
+            <div><span class="section-kicker">SEE</span><h2>과정 돌아보기</h2><p>잘한 점과 다음 행동을 정리하면 계획이 더 단단해집니다.</p></div>
+            <button id="add-reflection-button" class="button primary" type="button">＋ 회고 작성</button>
+          </div>
+          <div id="reflection-list" class="record-list"></div>
+        </section>
+
+        <section id="history-view" class="view" aria-label="계획 변경 기록">
+          <div class="workspace-head">
+            <div><span class="section-kicker">PLAN ARCHIVE</span><h2>처음부터 지금까지</h2><p>모든 계획 버전은 작성 시점 그대로 보관됩니다.</p></div>
+          </div>
+          <div id="full-history" class="version-list"></div>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="plan-dialog" class="modal">
+      <form id="plan-form" method="dialog">
+        <div class="modal-head"><div><span class="section-kicker">NEW VERSION</span><h2>계획 수정</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="닫기">×</button></div>
+        <p class="modal-copy">저장하면 기존 계획은 유지되고 새 버전이 추가됩니다.</p>
+        <div class="form-grid">
+          <label class="full">계획 이름<input name="title" required maxlength="80" /></label>
+          <label>시작일<input name="start_date" type="date" required /></label>
+          <label>마감일<input name="end_date" type="date" required /></label>
+          <label>우선순위<select name="priority"><option value="high">높음</option><option value="medium">보통</option><option value="low">낮음</option></select></label>
+          <label>예상 시간(일)<input name="expected_days" type="number" min="1" max="999" required /></label>
+          <label class="full">성공 기준<textarea name="success_criteria" rows="3" required maxlength="240"></textarea></label>
+        </div>
+        <div class="modal-actions"><button class="button secondary" type="button" data-close-dialog>취소</button><button id="save-plan-button" class="button primary" value="default">새 버전으로 저장</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="activity-dialog" class="modal">
+      <form id="activity-form" method="dialog">
+        <div class="modal-head"><div><span class="section-kicker">DO</span><h2>실행 기록 남기기</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="닫기">×</button></div>
+        <div class="form-grid">
+          <label>학습일<input name="activity_date" type="date" required /></label>
+          <label>학습 시간(분)<input name="minutes" type="number" min="1" max="1440" required value="60" /></label>
+          <label class="full">오늘 한 일<textarea name="note" rows="4" required maxlength="500" placeholder="예: 네트워크 기초 강의 2개 수강"></textarea></label>
+        </div>
+        <div class="modal-actions"><button class="button secondary" type="button" data-close-dialog>취소</button><button class="button primary" value="default">기록 저장</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="reflection-dialog" class="modal">
+      <form id="reflection-form" method="dialog">
+        <div class="modal-head"><div><span class="section-kicker">SEE</span><h2>과정 돌아보기</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="닫기">×</button></div>
+        <div class="form-grid">
+          <label>회고일<input name="reflection_date" type="date" required /></label>
+          <label>오늘의 만족도<select name="mood"><option value="great">아주 좋아요</option><option value="good">좋아요</option><option value="okay">보통이에요</option><option value="hard">아쉬워요</option></select></label>
+          <label class="full">잘한 점<textarea name="went_well" rows="3" required maxlength="500"></textarea></label>
+          <label class="full">다음 행동<textarea name="next_action" rows="3" required maxlength="500"></textarea></label>
+        </div>
+        <div class="modal-actions"><button class="button secondary" type="button" data-close-dialog>취소</button><button class="button primary" value="default">회고 저장</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="settings-dialog" class="modal settings-modal">
+      <form id="settings-form" method="dialog">
+        <div class="modal-head"><div><span class="section-kicker">DATABASE</span><h2>Supabase 연결</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="닫기">×</button></div>
+        <p class="modal-copy">프로젝트 URL과 공개용 anon key를 입력하세요. 기록 데이터는 브라우저가 아닌 Supabase에 저장됩니다.</p>
+        <div class="form-grid">
+          <label class="full">Project URL<input name="url" type="url" required placeholder="https://your-project.supabase.co" /></label>
+          <label class="full">Anon public key<textarea name="key" rows="4" required spellcheck="false"></textarea></label>
+        </div>
+        <details class="setup-help"><summary>처음 연결하는 방법</summary><ol><li>Supabase SQL Editor에서 프로젝트의 <code>supabase/schema.sql</code>을 실행합니다.</li><li>Project Settings → API에서 URL과 anon public key를 복사합니다.</li><li>여기에 붙여 넣고 연결을 확인합니다.</li></ol></details>
+        <div class="modal-actions"><button class="button secondary" type="button" data-close-dialog>취소</button><button class="button primary" value="default">연결하고 불러오기</button></div>
+      </form>
+    </dialog>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
