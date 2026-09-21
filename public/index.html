@@ -313,7 +313,7 @@
     <dialog id="task-execution-dialog" class="modal">
       <form id="task-execution-form" method="dialog">
         <div class="modal-head">
-          <div><span class="section-kicker">TASK EXECUTION</span><h2>실행 기록 남기기</h2></div>
+          <div><span class="section-kicker">TASK EXECUTION</span><h2 id="task-execution-dialog-title">실행 기록 남기기</h2></div>
           <button class="icon-button" type="button" data-close-dialog aria-label="닫기">×</button>
         </div>
         <p id="execution-task-title" class="modal-copy"></p>
@@ -326,7 +326,7 @@
         <p id="actual-time-help" class="form-help">시작과 종료 시각을 기준으로 자동 계산됩니다.</p>
         <div class="modal-actions">
           <button class="button secondary" type="button" data-close-dialog>취소</button>
-          <button class="button primary" value="default">실행 기록 저장</button>
+          <button id="save-task-execution-button" class="button primary" value="default">실행 기록 저장</button>
         </div>
       </form>
     </dialog>

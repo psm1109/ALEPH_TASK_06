@@ -107,6 +107,8 @@ drop policy if exists "public tasks update" on public.tasks;
 drop policy if exists "public tasks delete" on public.tasks;
 drop policy if exists "public task execution logs read" on public.task_execution_logs;
 drop policy if exists "public task execution logs insert" on public.task_execution_logs;
+drop policy if exists "public task execution logs update" on public.task_execution_logs;
+drop policy if exists "public task execution logs delete" on public.task_execution_logs;
 drop policy if exists "public task completion events read" on public.task_completion_events;
 
 create policy "public plan versions read" on public.plan_versions for select to anon
@@ -136,6 +138,11 @@ create policy "public task execution logs read" on public.task_execution_logs fo
   using (workspace_id = 'ccna-main');
 create policy "public task execution logs insert" on public.task_execution_logs for insert to anon
   with check (workspace_id = 'ccna-main');
+create policy "public task execution logs update" on public.task_execution_logs for update to anon
+  using (workspace_id = 'ccna-main')
+  with check (workspace_id = 'ccna-main');
+create policy "public task execution logs delete" on public.task_execution_logs for delete to anon
+  using (workspace_id = 'ccna-main');
 create policy "public task completion events read" on public.task_completion_events for select to anon
   using (workspace_id = 'ccna-main');
 
@@ -166,4 +173,4 @@ from public.tasks
 where is_completed = true
 on conflict (workspace_id, task_id) do nothing;
 
--- 계획 버전과 실행 기록은 추가 전용이며, 할 일만 상태 변경과 수정/삭제를 허용합니다.
+-- 계획 버전은 추가 전용이며, 할 일과 그 실행 기록만 수정/삭제를 허용합니다.

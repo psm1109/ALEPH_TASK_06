@@ -44,6 +44,7 @@ const state = {
   completionEvents: [],
   editingTaskId: null,
   executingTaskId: null,
+  editingExecutionId: null,
   pendingTaskIds: new Set(),
   taskQuery: {
     search: "",
@@ -421,8 +422,12 @@ function renderTasks() {
         <div class="task-linked-log-list">
           ${executionLogs.map((log) => `
             <div class="task-linked-log">
-              <strong>${formatTimestamp(log.start_time)} → ${formatTimestamp(log.end_time)} · ${formatMinutes(log.actual_minutes)}</strong><br />
-              막힌 이유 · ${escapeHTML(log.blocker_reason || "없음")}
+              <div><strong>${formatTimestamp(log.start_time)} → ${formatTimestamp(log.end_time)} · ${formatMinutes(log.actual_minutes)}</strong><br />
+              막힌 이유 · ${escapeHTML(log.blocker_reason || "없음")}</div>
+              <div class="execution-actions">
+                <button class="execution-action" type="button" data-action="edit-execution" data-execution-id="${escapeHTML(log.id)}">수정</button>
+                <button class="execution-action delete" type="button" data-action="delete-execution" data-execution-id="${escapeHTML(log.id)}">삭제</button>
+              </div>
             </div>
           `).join("")}
         </div>
@@ -478,6 +483,10 @@ function renderTaskExecutions() {
         <span>${formatTimestamp(log.start_time)} → ${formatTimestamp(log.end_time)}</span>
         <strong>실제 소요 ${formatMinutes(log.actual_minutes)}</strong>
         <span>막힌 이유 · ${escapeHTML(log.blocker_reason || "없음")}</span>
+      </div>
+      <div class="execution-actions">
+        <button class="execution-action" type="button" data-action="edit-execution" data-execution-id="${escapeHTML(log.id)}">수정</button>
+        <button class="execution-action delete" type="button" data-action="delete-execution" data-execution-id="${escapeHTML(log.id)}">삭제</button>
       </div>
     </article>
   `).join("");
@@ -620,6 +629,10 @@ function findTask(taskId) {
   return state.tasks.find((task) => String(task.id) === String(taskId));
 }
 
+function findExecutionLog(executionId) {
+  return state.taskExecutions.find((log) => String(log.id) === String(executionId));
+}
+
 function parseTags(value) {
   return [...new Set(String(value || "")
     .split(",")
@@ -659,17 +672,55 @@ function updateExecutionDurationPreview() {
   elements.taskExecutionForm.elements.actual_minutes.value = minutes ? formatMinutes(minutes) : "시간을 확인해 주세요";
 }
 
-function openTaskExecutionDialog(task) {
+function openTaskExecutionDialog(task, executionLog = null) {
   if (!task || !requireConnection()) return;
   state.executingTaskId = task.id;
+  state.editingExecutionId = executionLog?.id ?? null;
   elements.taskExecutionForm.reset();
-  const end = new Date();
-  const start = new Date(end.getTime() - 60 * 60000);
+  const end = executionLog ? new Date(executionLog.end_time) : new Date();
+  const start = executionLog ? new Date(executionLog.start_time) : new Date(end.getTime() - 60 * 60000);
   elements.taskExecutionForm.elements.start_time.value = toDateTimeLocalValue(start);
   elements.taskExecutionForm.elements.end_time.value = toDateTimeLocalValue(end);
+  elements.taskExecutionForm.elements.blocker_reason.value = executionLog?.blocker_reason || "";
+  $("#task-execution-dialog-title").textContent = executionLog ? "실행 기록 수정" : "실행 기록 남기기";
+  $("#save-task-execution-button").textContent = executionLog ? "변경 내용 저장" : "실행 기록 저장";
   $("#execution-task-title").textContent = `“${task.title}”에 연결되는 기록입니다.`;
   updateExecutionDurationPreview();
   elements.taskExecutionDialog.showModal();
+}
+
+function handleExecutionAction(button) {
+  const executionLog = findExecutionLog(button.dataset.executionId);
+  if (!executionLog) return;
+  if (button.dataset.action === "edit-execution") {
+    openTaskExecutionDialog(findTask(executionLog.task_id), executionLog);
+  }
+  if (button.dataset.action === "delete-execution") {
+    void deleteExecutionLog(executionLog);
+  }
+}
+
+async function deleteExecutionLog(executionLog) {
+  if (!requireConnection()) return;
+  const task = findTask(executionLog.task_id);
+  if (!window.confirm(`“${task?.title || "할 일"}”의 실행 기록을 삭제할까요?\n삭제한 기록은 되돌릴 수 없습니다.`)) return;
+
+  setLoading(true);
+  try {
+    await supabaseRequest("task_execution_logs", {
+      method: "DELETE",
+      query: `id=eq.${encodeURIComponent(executionLog.id)}&workspace_id=eq.${WORKSPACE_ID}`,
+    });
+    state.taskExecutions = state.taskExecutions.filter((log) => String(log.id) !== String(executionLog.id));
+    renderTasks();
+    renderTaskExecutions();
+    renderCompletionSummary();
+    showNotice("실행 기록을 삭제했습니다. 원래 계획과 할 일은 변경되지 않았습니다.", "success", 3200);
+  } catch (error) {
+    showNotice(`실행 기록을 삭제하지 못했습니다. ${error.message}`, "error");
+  } finally {
+    setLoading(false);
+  }
 }
 
 async function refreshCompletionEvents() {
@@ -812,10 +863,19 @@ function bindEvents() {
   $("#task-list").addEventListener("click", (event) => {
     const button = event.target.closest("[data-action]");
     if (!button || button.matches('input[type="checkbox"]')) return;
+    if (["edit-execution", "delete-execution"].includes(button.dataset.action)) {
+      handleExecutionAction(button);
+      return;
+    }
     const task = findTask(button.dataset.taskId);
     if (button.dataset.action === "record-execution" && task) openTaskExecutionDialog(task);
     if (button.dataset.action === "edit-task" && task) openTaskDialog(task);
     if (button.dataset.action === "delete-task") void deleteTask(button.dataset.taskId);
+  });
+
+  $("#all-task-execution-list").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-action]");
+    if (button) handleExecutionAction(button);
   });
 
   elements.taskForm.addEventListener("submit", async (event) => {
@@ -874,30 +934,48 @@ function bindEvents() {
 
     const originalPlanSnapshot = JSON.stringify(currentPlan());
     const data = Object.fromEntries(new FormData(elements.taskExecutionForm));
+    const payload = {
+      start_time: new Date(data.start_time).toISOString(),
+      end_time: new Date(data.end_time).toISOString(),
+      actual_minutes: minutes,
+      blocker_reason: data.blocker_reason.trim(),
+    };
+    const editingExecutionId = state.editingExecutionId;
+    const editing = editingExecutionId !== null;
     setLoading(true);
     try {
-      const [saved] = await supabaseRequest("task_execution_logs", {
+      const [saved] = await supabaseRequest("task_execution_logs", editing ? {
+        method: "PATCH",
+        query: `id=eq.${encodeURIComponent(editingExecutionId)}&workspace_id=eq.${WORKSPACE_ID}`,
+        body: payload,
+      } : {
         method: "POST",
-        body: [{
-          workspace_id: WORKSPACE_ID,
-          task_id: task.id,
-          start_time: new Date(data.start_time).toISOString(),
-          end_time: new Date(data.end_time).toISOString(),
-          actual_minutes: minutes,
-          blocker_reason: data.blocker_reason.trim(),
-        }],
+        body: [{ ...payload, workspace_id: WORKSPACE_ID, task_id: task.id }],
       });
+      if (!saved) throw new Error("저장된 실행 기록을 찾지 못했습니다.");
       if (JSON.stringify(currentPlan()) !== originalPlanSnapshot) {
         throw new Error("원래 계획 값이 변경되어 저장을 중단했습니다.");
       }
-      state.taskExecutions.unshift(saved);
+      if (editing) {
+        state.taskExecutions = state.taskExecutions.map((log) =>
+          String(log.id) === String(editingExecutionId) ? saved : log,
+        );
+      } else {
+        state.taskExecutions.unshift(saved);
+      }
+      state.editingExecutionId = null;
+      state.executingTaskId = null;
       elements.taskExecutionDialog.close();
       renderTasks();
       renderTaskExecutions();
       renderCompletionSummary();
-      showNotice("실행 기록을 저장했습니다. 원래 계획 값은 그대로 유지됩니다.", "success", 3600);
+      showNotice(
+        `${editing ? "실행 기록을 수정했습니다." : "실행 기록을 저장했습니다."} 원래 계획 값은 그대로 유지됩니다.`,
+        "success",
+        3600,
+      );
     } catch (error) {
-      showNotice(`실행 기록을 저장하지 못했습니다. ${error.message}`, "error");
+      showNotice(`실행 기록을 ${editing ? "수정" : "저장"}하지 못했습니다. ${error.message}`, "error");
     } finally {
       setLoading(false);
     }
