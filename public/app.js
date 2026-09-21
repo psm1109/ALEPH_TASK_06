@@ -39,19 +39,22 @@ const elements = {
 
 function readConfig() {
   const embedded = window.__PDS_CONFIG__ ?? {};
-  const config = normalizeConfig({ url: embedded.supabaseUrl, key: embedded.supabaseAnonKey });
-  return config.url && config.key ? config : null;
+  const config = normalizeConfig({
+    url: embedded.supabaseUrl,
+    publishableKey: embedded.supabasePublishableKey,
+  });
+  return config.url && config.publishableKey.startsWith("sb_publishable_") ? config : null;
 }
 
 function normalizeConfig(config) {
   return {
     url: String(config.url || "").trim().replace(/\/$/, ""),
-    key: String(config.key || "").trim(),
+    publishableKey: String(config.publishableKey || "").trim(),
   };
 }
 
 function hasConfig() {
-  return Boolean(state.config?.url && state.config?.key);
+  return Boolean(state.config?.url && state.config?.publishableKey);
 }
 
 async function supabaseRequest(table, { method = "GET", query = "", body } = {}) {
@@ -60,8 +63,7 @@ async function supabaseRequest(table, { method = "GET", query = "", body } = {})
   const response = await fetch(`${state.config.url}/rest/v1/${table}${query ? `?${query}` : ""}`, {
     method,
     headers: {
-      apikey: state.config.key,
-      Authorization: `Bearer ${state.config.key}`,
+      apikey: state.config.publishableKey,
       "Content-Type": "application/json",
       Prefer: method === "POST" ? "return=representation" : "return=minimal",
     },
@@ -86,7 +88,7 @@ async function supabaseRequest(table, { method = "GET", query = "", body } = {})
 async function connectAndLoad({ announce = true } = {}) {
   if (!hasConfig()) {
     setConnectionState("error", "Supabase 설정 누락");
-    showNotice("Supabase 연결 설정이 없습니다. public/config.js에 Project URL과 anon key를 입력해 주세요.", "error");
+    showNotice("Supabase 연결 설정이 없습니다. public/config.js에 Project URL과 sb_publishable_ 키를 입력해 주세요.", "error");
     return false;
   }
 
