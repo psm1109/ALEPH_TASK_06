@@ -37,13 +37,11 @@ const state = {
   connected: false,
   loading: false,
   versions: [initialPlan],
-  activities: [],
   reflections: [],
   tasks: previewTasks,
   taskExecutions: [],
   completionEvents: [],
   editingTaskId: null,
-  executingTaskId: null,
   editingExecutionId: null,
   pendingTaskIds: new Set(),
   taskQuery: {
@@ -63,12 +61,10 @@ const elements = {
   connectionLabel: $("#connection-label"),
   notice: $("#notice"),
   planDialog: $("#plan-dialog"),
-  activityDialog: $("#activity-dialog"),
   reflectionDialog: $("#reflection-dialog"),
   taskDialog: $("#task-dialog"),
   taskExecutionDialog: $("#task-execution-dialog"),
   planForm: $("#plan-form"),
-  activityForm: $("#activity-form"),
   reflectionForm: $("#reflection-form"),
   taskForm: $("#task-form"),
   taskExecutionForm: $("#task-execution-form"),
@@ -152,10 +148,7 @@ async function connectAndLoad({ announce = true } = {}) {
       });
     }
 
-    let [activities, reflections, tasks, taskExecutions, completionEvents] = await Promise.all([
-      supabaseRequest("activity_logs", {
-        query: `workspace_id=eq.${WORKSPACE_ID}&order=activity_date.desc,created_at.desc`,
-      }),
+    let [reflections, tasks, taskExecutions, completionEvents] = await Promise.all([
       supabaseRequest("reflections", {
         query: `workspace_id=eq.${WORKSPACE_ID}&order=reflection_date.desc,created_at.desc`,
       }),
@@ -183,7 +176,6 @@ async function connectAndLoad({ announce = true } = {}) {
     }
 
     state.versions = versions.sort((a, b) => b.version - a.version);
-    state.activities = activities;
     state.reflections = reflections;
     state.tasks = tasks;
     state.taskExecutions = taskExecutions;
@@ -243,6 +235,11 @@ function toISODate(date) {
   return `${year}-${month}-${day}`;
 }
 
+function executionDate(executionLog) {
+  const date = new Date(executionLog.start_time);
+  return Number.isNaN(date.getTime()) ? "" : toISODate(date);
+}
+
 function formatDate(value, separator = ".") {
   const date = parseLocalDate(value);
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join(separator);
@@ -269,7 +266,7 @@ function calculateDDay(endDate) {
 }
 
 function getProgress(plan) {
-  const completedDays = new Set(state.activities.map((item) => item.activity_date)).size;
+  const completedDays = new Set(state.taskExecutions.map(executionDate).filter(Boolean)).size;
   const percent = Math.min(100, Math.round((completedDays / plan.expected_days) * 100));
   return { completedDays, percent };
 }
@@ -316,8 +313,8 @@ function renderWeek() {
     const date = new Date(monday);
     date.setDate(monday.getDate() + index);
     const iso = toISODate(date);
-    const entries = state.activities.filter((item) => item.activity_date === iso);
-    const minutes = entries.reduce((sum, item) => sum + Number(item.minutes || 0), 0);
+    const entries = state.taskExecutions.filter((item) => executionDate(item) === iso);
+    const minutes = entries.reduce((sum, item) => sum + Number(item.actual_minutes || 0), 0);
     weekEntryCount += entries.length;
     const cell = document.createElement("div");
     cell.className = `day-cell${entries.length ? " has-entry" : ""}`;
@@ -472,7 +469,7 @@ function renderTaskExecutions() {
   $("#execution-log-count").textContent = `${state.taskExecutions.length}건`;
   const list = $("#all-task-execution-list");
   if (!state.taskExecutions.length) {
-    list.innerHTML = '<div class="task-empty"><strong>아직 할 일 실행 기록이 없어요</strong><p>할 일의 ‘기록’ 버튼에서 실제 실행 시간을 남겨보세요.</p></div>';
+    list.innerHTML = '<div class="task-empty"><strong>아직 실행 기록이 없어요</strong><p>상단의 ‘실행 기록’ 버튼에서 연결할 할 일을 선택해 보세요.</p></div>';
     return;
   }
 
@@ -522,22 +519,6 @@ function renderTimeline() {
     `;
     timeline.append(item);
   });
-}
-
-function renderActivities() {
-  const list = $("#activity-list");
-  if (!state.activities.length) {
-    list.innerHTML = emptyState("▷", "아직 실행 기록이 없어요", "오늘 실천한 학습을 첫 기록으로 남겨보세요.");
-    return;
-  }
-
-  list.innerHTML = state.activities.map((item) => `
-    <article class="record-card">
-      <span class="record-icon" aria-hidden="true">✓</span>
-      <div class="record-copy"><h3>${formatDate(item.activity_date)} · ${Number(item.minutes)}분</h3><p>${escapeHTML(item.note)}</p></div>
-      <div class="record-meta">계획 v${item.plan_version}<br />${formatTimestamp(item.created_at)}</div>
-    </article>
-  `).join("");
 }
 
 function renderReflections() {
@@ -600,7 +581,6 @@ function renderAll() {
   renderTaskExecutions();
   renderCompletionSummary();
   renderTimeline();
-  renderActivities();
   renderReflections();
   renderFullHistory();
 }
@@ -672,11 +652,20 @@ function updateExecutionDurationPreview() {
   elements.taskExecutionForm.elements.actual_minutes.value = minutes ? formatMinutes(minutes) : "시간을 확인해 주세요";
 }
 
-function openTaskExecutionDialog(task, executionLog = null) {
-  if (!task || !requireConnection()) return;
-  state.executingTaskId = task.id;
+function openTaskExecutionDialog(task = null, executionLog = null) {
+  if (!requireConnection()) return;
+  if (!state.tasks.length) {
+    showNotice("실행 기록을 연결할 할 일을 먼저 만들어 주세요.", "error");
+    return;
+  }
   state.editingExecutionId = executionLog?.id ?? null;
   elements.taskExecutionForm.reset();
+  const taskSelect = elements.taskExecutionForm.elements.task_id;
+  taskSelect.innerHTML = state.tasks
+    .map((item) => `<option value="${escapeHTML(item.id)}">${escapeHTML(item.title)}</option>`)
+    .join("");
+  const selectedTaskId = executionLog?.task_id ?? task?.id ?? state.tasks[0].id;
+  taskSelect.value = String(selectedTaskId);
   const end = executionLog ? new Date(executionLog.end_time) : new Date();
   const start = executionLog ? new Date(executionLog.start_time) : new Date(end.getTime() - 60 * 60000);
   elements.taskExecutionForm.elements.start_time.value = toDateTimeLocalValue(start);
@@ -684,7 +673,9 @@ function openTaskExecutionDialog(task, executionLog = null) {
   elements.taskExecutionForm.elements.blocker_reason.value = executionLog?.blocker_reason || "";
   $("#task-execution-dialog-title").textContent = executionLog ? "실행 기록 수정" : "실행 기록 남기기";
   $("#save-task-execution-button").textContent = executionLog ? "변경 내용 저장" : "실행 기록 저장";
-  $("#execution-task-title").textContent = `“${task.title}”에 연결되는 기록입니다.`;
+  $("#execution-task-title").textContent = task
+    ? `“${task.title}”이 선택되었습니다. 필요하면 다른 할 일로 바꿀 수 있습니다.`
+    : "실행한 할 일을 선택하면 기록이 해당 할 일에 자동으로 연결됩니다.";
   updateExecutionDurationPreview();
   elements.taskExecutionDialog.showModal();
 }
@@ -712,6 +703,8 @@ async function deleteExecutionLog(executionLog) {
       query: `id=eq.${encodeURIComponent(executionLog.id)}&workspace_id=eq.${WORKSPACE_ID}`,
     });
     state.taskExecutions = state.taskExecutions.filter((log) => String(log.id) !== String(executionLog.id));
+    renderPlan();
+    renderWeek();
     renderTasks();
     renderTaskExecutions();
     renderCompletionSummary();
@@ -786,13 +779,7 @@ function bindEvents() {
     button.closest("dialog")?.close();
   }));
   $$('[data-view]').forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
-  $$('[data-open-activity]').forEach((button) => button.addEventListener("click", () => {
-    if (!requireConnection()) return;
-    elements.activityForm.reset();
-    elements.activityForm.elements.activity_date.value = toISODate(new Date());
-    elements.activityForm.elements.minutes.value = 60;
-    elements.activityDialog.showModal();
-  }));
+  $$('[data-open-task-execution]').forEach((button) => button.addEventListener("click", () => openTaskExecutionDialog()));
 
   $("#edit-plan-button").addEventListener("click", () => {
     if (!requireConnection()) return;
@@ -925,16 +912,21 @@ function bindEvents() {
   elements.taskExecutionForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!requireConnection()) return;
-    const task = findTask(state.executingTaskId);
+    const data = Object.fromEntries(new FormData(elements.taskExecutionForm));
+    const task = findTask(data.task_id);
     const minutes = executionMinutesFromForm();
-    if (!task || !minutes) {
+    if (!task) {
+      showNotice("실행 기록을 연결할 할 일을 선택해 주세요.", "error");
+      return;
+    }
+    if (!minutes) {
       showNotice("끝난 시각은 시작 시각보다 뒤여야 합니다.", "error");
       return;
     }
 
     const originalPlanSnapshot = JSON.stringify(currentPlan());
-    const data = Object.fromEntries(new FormData(elements.taskExecutionForm));
     const payload = {
+      task_id: task.id,
       start_time: new Date(data.start_time).toISOString(),
       end_time: new Date(data.end_time).toISOString(),
       actual_minutes: minutes,
@@ -950,7 +942,7 @@ function bindEvents() {
         body: payload,
       } : {
         method: "POST",
-        body: [{ ...payload, workspace_id: WORKSPACE_ID, task_id: task.id }],
+        body: [{ ...payload, workspace_id: WORKSPACE_ID }],
       });
       if (!saved) throw new Error("저장된 실행 기록을 찾지 못했습니다.");
       if (JSON.stringify(currentPlan()) !== originalPlanSnapshot) {
@@ -964,13 +956,14 @@ function bindEvents() {
         state.taskExecutions.unshift(saved);
       }
       state.editingExecutionId = null;
-      state.executingTaskId = null;
       elements.taskExecutionDialog.close();
+      renderPlan();
+      renderWeek();
       renderTasks();
       renderTaskExecutions();
       renderCompletionSummary();
       showNotice(
-        `${editing ? "실행 기록을 수정했습니다." : "실행 기록을 저장했습니다."} 원래 계획 값은 그대로 유지됩니다.`,
+        `${editing ? "실행 기록을 수정했습니다." : "실행 기록을 저장했습니다."} “${task.title}” 할 일에 연결되었고 원래 계획 값은 그대로 유지됩니다.`,
         "success",
         3600,
       );
@@ -1011,34 +1004,6 @@ function bindEvents() {
     } catch (error) {
       showNotice(`계획을 저장하지 못했습니다. ${error.message}`, "error");
       await connectAndLoad({ announce: false });
-    } finally {
-      setLoading(false);
-    }
-  });
-
-  elements.activityForm.addEventListener("submit", async (event) => {
-    if (event.submitter?.value === "cancel") return;
-    event.preventDefault();
-    if (!requireConnection()) return;
-    const data = Object.fromEntries(new FormData(elements.activityForm));
-    setLoading(true);
-    try {
-      const [saved] = await supabaseRequest("activity_logs", {
-        method: "POST",
-        body: [{
-          workspace_id: WORKSPACE_ID,
-          plan_version: currentPlan().version,
-          activity_date: data.activity_date,
-          minutes: Number(data.minutes),
-          note: data.note.trim(),
-        }],
-      });
-      state.activities.unshift(saved);
-      elements.activityDialog.close();
-      renderAll();
-      showNotice("실행 기록을 저장했습니다.", "success", 2800);
-    } catch (error) {
-      showNotice(`실행 기록을 저장하지 못했습니다. ${error.message}`, "error");
     } finally {
       setLoading(false);
     }

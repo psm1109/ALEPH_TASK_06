@@ -115,7 +115,7 @@
                     </dl>
                     <div class="plan-actions">
                       <button id="edit-plan-button" class="button secondary" type="button">✎ 계획 수정</button>
-                      <button class="button primary" data-open-activity type="button">▷ 실행 기록 남기기</button>
+                      <button class="button primary" data-open-task-execution type="button">▷ 실행 기록 남기기</button>
                     </div>
                   </div>
                 </div>
@@ -127,7 +127,7 @@
                   <span id="week-range" class="muted"></span>
                 </div>
                 <div id="week-grid" class="week-grid"></div>
-                <button id="week-empty" class="empty-action" data-open-activity type="button">
+                <button id="week-empty" class="empty-action" data-open-task-execution type="button">
                   <span aria-hidden="true">▧</span>
                   <span><strong>아직 실행 기록이 없어요</strong><small>첫 학습을 기록해 보세요</small></span>
                 </button>
@@ -208,16 +208,15 @@
 
         <section id="do-view" class="view" aria-label="실행 기록">
           <div class="workspace-head">
-            <div><span class="section-kicker">DO</span><h2>오늘의 실행</h2><p>계획을 실제 행동으로 옮긴 순간을 남겨보세요.</p></div>
-            <button class="button primary" data-open-activity type="button">＋ 실행 기록</button>
+            <div><span class="section-kicker">DO</span><h2>실행 기록</h2><p>실행한 할 일을 선택하면 기록이 해당 할 일에 바로 연결됩니다.</p></div>
+            <button class="button primary" data-open-task-execution type="button">＋ 실행 기록</button>
           </div>
-          <div id="activity-list" class="record-list"></div>
           <article class="card linked-log-section">
             <div class="card-heading compact">
-              <div><span class="section-kicker">TASK EXECUTIONS</span><h2>할 일별 실행 기록</h2></div>
+              <div><span class="section-kicker">TASK EXECUTIONS</span><h2>할 일에 연결된 기록</h2></div>
               <span id="execution-log-count" class="version-chip">0건</span>
             </div>
-            <p class="card-description">시작·종료 시각과 실제 소요 시간, 막힌 지점을 할 일과 함께 확인합니다.</p>
+            <p class="card-description">모든 실행 기록은 하나의 할 일에 연결되며, 시작·종료 시각과 실제 소요 시간, 막힌 지점을 함께 확인할 수 있습니다.</p>
             <div id="all-task-execution-list" class="linked-log-list"></div>
           </article>
         </section>
@@ -264,18 +263,6 @@
       </form>
     </dialog>
 
-    <dialog id="activity-dialog" class="modal">
-      <form id="activity-form" method="dialog">
-        <div class="modal-head"><div><span class="section-kicker">DO</span><h2>실행 기록 남기기</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="닫기">×</button></div>
-        <div class="form-grid">
-          <label>학습일<input name="activity_date" type="date" required /></label>
-          <label>학습 시간(분)<input name="minutes" type="number" min="1" max="1440" required value="60" /></label>
-          <label class="full">오늘 한 일<textarea name="note" rows="4" required maxlength="500" placeholder="예: 네트워크 기초 강의 2개 수강"></textarea></label>
-        </div>
-        <div class="modal-actions"><button class="button secondary" type="button" data-close-dialog>취소</button><button class="button primary" value="default">기록 저장</button></div>
-      </form>
-    </dialog>
-
     <dialog id="reflection-dialog" class="modal">
       <form id="reflection-form" method="dialog">
         <div class="modal-head"><div><span class="section-kicker">SEE</span><h2>과정 돌아보기</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="닫기">×</button></div>
@@ -318,6 +305,7 @@
         </div>
         <p id="execution-task-title" class="modal-copy"></p>
         <div class="form-grid">
+          <label class="full">연결할 할 일<select name="task_id" required></select></label>
           <label>시작 시각<input name="start_time" type="datetime-local" required /></label>
           <label>끝난 시각<input name="end_time" type="datetime-local" required /></label>
           <label>실제로 걸린 시간<input name="actual_minutes" readonly aria-describedby="actual-time-help" /></label>

@@ -134,6 +134,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .day-cell.has-entry .day-dot { background: var(--green); box-shadow: 0 0 0 5px rgba(36,154,114,.09); }
 .day-cell small { color: var(--muted); font-size: .68rem; }
 .empty-action { width: 100%; min-height: 90px; display: flex; justify-content: center; align-items: center; gap: 16px; border: 1px dashed #b9ddd0; border-radius: 14px; background: linear-gradient(135deg, #f9fdfb, #eff9f5); cursor: pointer; }
+.empty-action[hidden] { display: none; }
 .empty-action > span:first-child { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; color: var(--green-dark); background: #def1ea; font-size: 1.2rem; }
 .empty-action > span:last-child { display: grid; gap: 4px; text-align: left; }
 .empty-action strong { font-size: .88rem; }
@@ -210,7 +211,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .workspace-head h2 { font-size: 1.7rem; }
 .workspace-head p { margin: 8px 0 0; color: var(--muted); }
 .record-list, .version-list { display: grid; gap: 13px; }
-.linked-log-section, .completion-history-card { margin-top: 22px; padding: 24px; }
+.linked-log-section { padding: 24px; }
+.completion-history-card { margin-top: 22px; padding: 24px; }
 .linked-log-list, .completion-event-list { display: grid; gap: 10px; }
 .linked-log-card { display: grid; grid-template-columns: minmax(180px, .8fr) minmax(0, 1.2fr) auto; gap: 16px; align-items: start; padding: 15px 16px; border: 1px solid var(--line); border-radius: 13px; background: #fbfcfb; }
 .linked-log-card h3 { margin: 0 0 5px; font-size: .9rem; }
