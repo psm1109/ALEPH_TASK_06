@@ -24,14 +24,26 @@ body {
   min-height: 100vh;
   color: var(--ink);
   background: var(--canvas);
+  cursor: default;
   user-select: none;
+  -webkit-user-select: none;
   caret-color: transparent;
 }
+body :not(input):not(textarea) { caret-color: transparent; }
 button, input, textarea, select { font: inherit; }
-input, textarea {
+input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]), textarea {
+  cursor: text;
   user-select: text;
+  -webkit-user-select: text;
   caret-color: auto;
 }
+input[type="checkbox"], input[type="radio"], input[type="button"], input[type="submit"], input[type="reset"] {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  caret-color: transparent;
+}
+button, a, select, summary { cursor: pointer; }
 button { color: inherit; }
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible {
   outline: 3px solid rgba(36, 154, 114, 0.24);
