@@ -2,7 +2,16 @@
 
 계획(Plan) → 실행(Do) → 돌아보기(See)를 하나의 흐름으로 연결하는 개인 기록 도구입니다. 계획과 실제 행동을 분리해 저장하고, 예상과 실제의 차이를 근거 기록과 함께 확인할 수 있습니다.
 
-> 지금은 로그인이 없어 링크를 아는 사람은 누구나 볼 수 있습니다. 남이 봐도 괜찮은 내용만 넣으세요.
+> 첫 화면은 누구나 열 수 있는 로그인·가입 화면입니다. 다이어리 자료는 로그인한 계정의 `user_id`와 일치할 때만 Supabase RLS가 반환합니다.
+
+## 계정과 자료 보호
+
+- Supabase Auth 이메일·비밀번호 방식으로 가입, 로그인, 로그아웃합니다.
+- 브라우저 라이브러리는 `@supabase/supabase-js` `2.116.0`으로 고정했습니다.
+- 로그인하지 않은 상태에서는 URL의 `#plan`, `#do`, `#see`, `#history`를 직접 열어도 다이어리 대신 로그인 화면이 나옵니다.
+- 모든 자료 요청은 세션 access token을 `Authorization` 헤더로 보내며 URL에는 싣지 않습니다.
+- 각 자료 행의 `user_id`가 서버의 `auth.uid()`와 같은지는 PostgreSQL RLS가 검사합니다.
+- 로그인 실패 화면은 존재하지 않는 이메일과 틀린 비밀번호를 구별하지 않고 모두 `이메일 또는 비밀번호를 확인해 주세요.`라고 표시합니다.
 
 ## 주요 기능
 
@@ -44,8 +53,11 @@
 ## Supabase 설정
 
 1. Supabase 프로젝트의 SQL Editor에서 [`supabase/schema.sql`](supabase/schema.sql)을 실행합니다.
-2. [`public/config.js`](public/config.js)에 Project URL과 `sb_publishable_...` 형식의 Publishable key를 설정합니다.
-3. `public` 디렉터리를 정적 웹 루트로 실행하거나 배포합니다.
+2. Supabase Authentication의 Email provider를 활성화합니다. 과제 확인 중 가입 직후 로그인해야 한다면 Confirm email을 끕니다.
+3. [`public/config.js`](public/config.js)에 Project URL과 `sb_publishable_...` 형식의 Publishable key를 설정합니다.
+4. 가입 화면에서 기존 자료를 소유할 본인 계정을 만듭니다.
+5. [`supabase/card1-migrate-existing-data.sql`](supabase/card1-migrate-existing-data.sql)의 `OWNER_EMAIL@example.com` 두 곳을 그 계정 이메일로 바꿔 SQL Editor에서 한 번 실행합니다.
+6. `public` 디렉터리를 정적 웹 루트로 실행하거나 배포합니다.
 
 ```js
 window.__PDS_CONFIG__ = {
@@ -54,9 +66,7 @@ window.__PDS_CONFIG__ = {
 };
 ```
 
-웹페이지에는 Supabase 설정 입력 화면이 없습니다. `sb_publishable_...` 키는 브라우저에서 사용하는 공개 키이며 실제 접근 범위는 `schema.sql`의 RLS 정책으로 제한합니다. `sb_secret_...`, `service_role`, JWT 비밀값은 브라우저 코드나 Git에 넣으면 안 됩니다.
-
-현재 구성은 로그인 없는 단일 공개 워크스페이스입니다. 링크와 공개 설정을 아는 사용자는 RLS가 허용하는 범위에서 자료를 조회하거나 변경할 수 있으므로 민감한 내용을 저장하지 마세요.
+웹페이지에는 Supabase 설정 입력 화면이 없습니다. Publishable key는 공개 식별자이며 자료 접근 권한을 부여하는 비밀키가 아닙니다. `schema.sql`은 `anon` 역할의 다이어리 권한을 제거하고, 로그인한 계정과 행의 `user_id`가 일치할 때만 자료를 허용합니다. `sb_secret_...`, `service_role`, JWT 비밀값은 브라우저 코드나 Git에 넣으면 안 됩니다.
 
 ## 로컬 실행
 
@@ -77,17 +87,20 @@ python -m http.server 4173 --directory public
 ├─ public/
 │  ├─ index.html       # 화면 구조와 입력 모달
 │  ├─ styles.css       # 레이아웃, 반응형 UI, 커서 규칙
-│  ├─ app.js           # Plan·Do·See 상태와 Supabase REST 처리
+│  ├─ app.js           # 인증 상태, Plan·Do·See 상태와 Supabase REST 처리
 │  └─ config.js        # Project URL과 Publishable key
 ├─ supabase/
-│  └─ schema.sql       # 테이블, 인덱스, RLS, 완료 중복 방지
+│  ├─ schema.sql       # 사용자 소유권 열, RLS, 완료 중복 방지
+│  └─ card1-migrate-existing-data.sql # 기존 pds-main 자료 소유자 이관
 └─ contracts/
    └─ pds-schema-v2.json # 데이터 계약과 내보내기 규칙
 ```
 
 ## 정상 동작 확인
 
-- 상단 연결 상태에 `Supabase 저장됨`이 표시됩니다.
+- 새 시크릿 창과 로그아웃 상태에서는 로그인 화면만 표시됩니다.
+- 가입한 계정으로 로그인하면 상단 연결 상태에 `Supabase 저장됨`이 표시됩니다.
+- 로그아웃하면 즉시 다이어리가 사라지고 로그인 화면으로 돌아갑니다.
 - 첫 계획을 저장하면 할 일·실행·회고 기능이 활성화됩니다.
 - 새로고침 후에도 저장된 자료와 집계가 유지됩니다.
 - Plan에서는 계획과 할 일, Do에서는 연결된 실행 기록, See에서는 집계 근거와 회고가 표시됩니다.
