@@ -149,6 +149,9 @@
   "security": {
     "authentication_service": "Supabase Auth",
     "client_library": "@supabase/supabase-js 2.116.0",
+    "password_hashing": "bcrypt with a randomly generated salt per password, managed by Supabase Auth",
+    "password_storage": "Only auth.users.encrypted_password is stored by Supabase Auth; plaintext is not stored in diary tables.",
+    "password_logging": "The app does not log passwords or raw authentication request and response bodies.",
     "authorization": "PostgreSQL RLS requires authenticated and user_id = auth.uid().",
     "access_token_transport": "Authorization header only; never URL query parameters.",
     "rendering": "사용자 입력은 textContent 또는 HTML 이스케이프 후 표시한다.",

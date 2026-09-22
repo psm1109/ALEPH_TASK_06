@@ -146,6 +146,7 @@ async function handleLoginSubmit(event) {
   } catch {
     showAuthNotice(GENERIC_LOGIN_ERROR);
   } finally {
+    elements.loginForm.elements.password.value = "";
     setLoading(false);
   }
 }
@@ -156,6 +157,8 @@ async function handleSignupSubmit(event) {
   const formData = new FormData(elements.signupForm);
   const password = String(formData.get("password") || "");
   if (password !== String(formData.get("password_confirm") || "")) {
+    elements.signupForm.elements.password.value = "";
+    elements.signupForm.elements.password_confirm.value = "";
     showAuthNotice("비밀번호 확인 값이 서로 다릅니다.");
     return;
   }
@@ -184,6 +187,8 @@ async function handleSignupSubmit(event) {
   } catch {
     showAuthNotice("가입 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
   } finally {
+    elements.signupForm.elements.password.value = "";
+    elements.signupForm.elements.password_confirm.value = "";
     setLoading(false);
   }
 }

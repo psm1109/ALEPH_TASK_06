@@ -13,6 +13,13 @@
 - 각 자료 행의 `user_id`가 서버의 `auth.uid()`와 같은지는 PostgreSQL RLS가 검사합니다.
 - 로그인 실패 화면은 존재하지 않는 이메일과 틀린 비밀번호를 구별하지 않고 모두 `이메일 또는 비밀번호를 확인해 주세요.`라고 표시합니다.
 
+### 비밀번호 보관
+
+- 비밀번호 저장과 검증은 직접 구현하지 않고 Supabase Auth에 맡깁니다.
+- Supabase Auth는 비밀번호를 계정별 무작위 salt가 포함된 bcrypt 해시로 `auth.users.encrypted_password`에 저장합니다.
+- 앱은 인증 요청이나 응답 본문을 콘솔에 기록하지 않으며, 인증 시도 뒤 비밀번호 입력칸을 비웁니다.
+- 같은 비밀번호로 만든 두 시험 계정의 해시 확인은 SQL Editor 전용 [`supabase/card2-password-evidence.sql`](supabase/card2-password-evidence.sql)을 사용합니다. 이 파일에는 비밀번호를 적지 않습니다.
+
 ## 주요 기능
 
 ### Plan · 계획
@@ -107,3 +114,10 @@ python -m http.server 4173 --directory public
 - `전체 자료 내보내기`를 누르면 `pds-diary-<workspace>-YYYY-MM-DD.json` 파일이 생성됩니다.
 
 연결 정보가 없거나 요청에 실패하면 `Supabase 설정 누락` 또는 `Supabase 연결 실패` 상태와 오류 안내가 표시됩니다. 계획이나 기록이 없을 때는 각 영역에 다음 행동을 알려 주는 빈 상태 안내가 나타납니다.
+
+정적 보안 검사는 다음 명령으로 실행합니다.
+
+```bash
+node tests/card1-static.test.cjs
+node tests/card2-password.test.cjs
+```
