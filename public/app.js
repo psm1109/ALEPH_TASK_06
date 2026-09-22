@@ -785,7 +785,6 @@ function renderAll() {
 
 function switchView(view) {
   $$(".view").forEach((section) => section.classList.toggle("is-active", section.id === `${view}-view`));
-  $$(".journey-step").forEach((button) => button.classList.toggle("is-active", button.dataset.view === view));
   $$(".nav-item").forEach((button) => button.classList.remove("is-active"));
   const matchingNav = $(`.nav-item[data-view="${view}"]`);
   if (matchingNav) matchingNav.classList.add("is-active");
