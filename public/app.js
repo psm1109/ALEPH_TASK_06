@@ -1,4 +1,5 @@
 const WORKSPACE_ID = "ccna-main";
+const EXPORT_SCHEMA_VERSION = "2.0.0";
 
 const initialPlan = {
   id: "preview-v1",
@@ -70,6 +71,7 @@ const elements = {
   reflectionForm: $("#reflection-form"),
   taskForm: $("#task-form"),
   taskExecutionForm: $("#task-execution-form"),
+  exportDataButton: $("#export-data-button"),
 };
 
 function readConfig() {
@@ -251,8 +253,7 @@ function toSeoulISODate(value = new Date()) {
 }
 
 function executionDate(executionLog) {
-  const date = new Date(executionLog.start_time);
-  return Number.isNaN(date.getTime()) ? "" : toISODate(date);
+  return toSeoulISODate(executionLog.start_time);
 }
 
 function formatDate(value, separator = ".") {
@@ -268,13 +269,13 @@ function formatShortDate(value) {
 function formatTimestamp(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short" }).format(date);
+  return new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Seoul" }).format(date);
 }
 
 function formatTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("ko-KR", { hour: "numeric", minute: "2-digit" }).format(date);
+  return new Intl.DateTimeFormat("ko-KR", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Seoul" }).format(date);
 }
 
 function formatExecutionDate(value) {
@@ -285,8 +286,7 @@ function formatExecutionDate(value) {
 }
 
 function calculateDDay(endDate) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = parseLocalDate(toSeoulISODate());
   const target = parseLocalDate(endDate);
   const days = Math.ceil((target - today) / 86400000);
   if (days === 0) return "D-DAY";
@@ -328,8 +328,7 @@ function renderPlan() {
 }
 
 function renderWeek() {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
+  const now = parseLocalDate(toSeoulISODate());
   const monday = new Date(now);
   const day = monday.getDay();
   monday.setDate(monday.getDate() - (day === 0 ? 6 : day - 1));
@@ -443,7 +442,7 @@ function renderTasks() {
     const taskId = escapeHTML(task.id);
     const tags = (task.tags || []).map((tag) => `<span class="task-tag">#${escapeHTML(tag)}</span>`).join("");
     const overdue = isOverdue(task);
-    const today = toISODate(new Date());
+    const today = toSeoulISODate();
     const todayExecutionLogs = state.taskExecutions.filter((log) =>
       String(log.task_id) === String(task.id) && executionDate(log) === today,
     );
@@ -772,6 +771,58 @@ function escapeHTML(value) {
   })[character]);
 }
 
+function createExportPayload() {
+  return {
+    format: "pds-diary-export",
+    schema_version: EXPORT_SCHEMA_VERSION,
+    exported_at: new Date().toISOString(),
+    workspace_id: WORKSPACE_ID,
+    timezone: "Asia/Seoul",
+    units: {
+      plan_expected_time: "day",
+      task_expected_time: "minute",
+      execution_actual_time: "minute",
+    },
+    data: {
+      plan_versions: state.versions,
+      tasks: state.tasks,
+      task_execution_logs: state.taskExecutions,
+      task_completion_events: state.completionEvents,
+      reflections: state.reflections,
+    },
+  };
+}
+
+async function exportAllData() {
+  if (!requireConnection()) return;
+  elements.exportDataButton.disabled = true;
+  elements.exportDataButton.textContent = "최신 자료 확인 중…";
+  try {
+    const loaded = await connectAndLoad({ announce: false });
+    if (!loaded) return;
+    const payload = createExportPayload();
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = `pds-diary-${WORKSPACE_ID}-${toSeoulISODate()}.json`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
+    showNotice(
+      `전체 자료를 JSON 파일로 내보냈습니다. 계획 ${payload.data.plan_versions.length}건 · 할 일 ${payload.data.tasks.length}건 · 실행 ${payload.data.task_execution_logs.length}건 · 회고 ${payload.data.reflections.length}건`,
+      "success",
+      5200,
+    );
+  } catch (error) {
+    showNotice(`자료를 내보내지 못했습니다. ${error.message}`, "error");
+  } finally {
+    elements.exportDataButton.disabled = false;
+    elements.exportDataButton.textContent = "전체 자료 내보내기";
+  }
+}
+
 function renderAll() {
   renderPlan();
   renderWeek();
@@ -978,6 +1029,7 @@ function bindEvents() {
   }));
   $$('[data-view]').forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
   $$('[data-open-task-execution]').forEach((button) => button.addEventListener("click", () => openTaskExecutionDialog()));
+  elements.exportDataButton.addEventListener("click", () => void exportAllData());
 
   $("#edit-plan-button").addEventListener("click", () => {
     if (!requireConnection()) return;

@@ -1,0 +1,142 @@
+{
+  "contract_id": "pds-schema-v2",
+  "title": "PDS Diary 데이터 계약 v2",
+  "version": "2.0.0",
+  "workspace": {
+    "mode": "public-single-workspace",
+    "workspace_id": "ccna-main",
+    "authentication": false,
+    "notice": "지금은 로그인이 없어 링크를 아는 사람은 누구나 볼 수 있습니다. 남이 봐도 괜찮은 내용만 넣으세요"
+  },
+  "date_rules": {
+    "timezone": "Asia/Seoul",
+    "date": "YYYY-MM-DD 형식의 달력 날짜이며 시간대 변환을 하지 않는다.",
+    "timestamp": "RFC 3339 형식으로 저장하고 화면 표시와 날짜별 집계에는 Asia/Seoul을 적용한다.",
+    "today": "지연 여부와 오늘 기록은 Asia/Seoul의 현재 날짜를 기준으로 판단한다.",
+    "duration": "실행 시간은 end_time과 start_time 차이를 반올림한 양의 정수 분으로 저장한다."
+  },
+  "units": {
+    "plan_versions.expected_days": "day",
+    "tasks.estimated_minutes": "minute",
+    "task_execution_logs.actual_minutes": "minute"
+  },
+  "tables": {
+    "plan_versions": {
+      "description": "수정할 때 기존 행을 덮어쓰지 않는 계획 버전",
+      "primary_key": "id",
+      "unique": [["workspace_id", "version"]],
+      "fields": {
+        "id": { "type": "integer", "generated": true },
+        "workspace_id": { "type": "string", "required": true },
+        "version": { "type": "integer", "required": true, "minimum": 1 },
+        "title": { "type": "string", "required": true },
+        "start_date": { "type": "date", "required": true },
+        "end_date": { "type": "date", "required": true },
+        "priority": { "type": "enum", "values": ["high", "medium", "low"], "required": true },
+        "success_criteria": { "type": "string", "required": true },
+        "expected_days": { "type": "integer", "unit": "day", "minimum": 1, "required": true },
+        "carryover_note": { "type": "string", "required": true, "default": "" },
+        "created_at": { "type": "timestamp", "required": true, "generated": true }
+      }
+    },
+    "tasks": {
+      "description": "계획 버전에 딸린 할 일",
+      "primary_key": "id",
+      "unique": [["workspace_id", "seed_key"]],
+      "fields": {
+        "id": { "type": "integer", "generated": true },
+        "workspace_id": { "type": "string", "required": true },
+        "plan_version": { "type": "integer", "required": true },
+        "seed_key": { "type": ["string", "null"] },
+        "title": { "type": "string", "required": true },
+        "due_date": { "type": "date", "required": true },
+        "priority": { "type": "enum", "values": ["high", "medium", "low"], "required": true },
+        "tags": { "type": "array", "items": "string", "required": true, "default": [] },
+        "estimated_minutes": { "type": "integer", "unit": "minute", "minimum": 1, "required": true },
+        "is_completed": { "type": "boolean", "required": true, "default": false },
+        "completed_at": { "type": ["timestamp", "null"] },
+        "created_at": { "type": "timestamp", "required": true, "generated": true },
+        "updated_at": { "type": "timestamp", "required": true, "generated": true }
+      }
+    },
+    "task_execution_logs": {
+      "description": "할 일에 연결되는 실제 실행 기록",
+      "primary_key": "id",
+      "fields": {
+        "id": { "type": "integer", "generated": true },
+        "workspace_id": { "type": "string", "required": true },
+        "task_id": { "type": "integer", "required": true },
+        "start_time": { "type": "timestamp", "required": true },
+        "end_time": { "type": "timestamp", "required": true, "constraint": "end_time > start_time" },
+        "actual_minutes": { "type": "integer", "unit": "minute", "minimum": 1, "required": true },
+        "blocker_reason": { "type": "string", "required": true, "default": "" },
+        "created_at": { "type": "timestamp", "required": true, "generated": true }
+      }
+    },
+    "task_completion_events": {
+      "description": "할 일별로 한 번만 생기는 최초 완료 기록",
+      "primary_key": "id",
+      "unique": [["workspace_id", "task_id"]],
+      "fields": {
+        "id": { "type": "integer", "generated": true },
+        "workspace_id": { "type": "string", "required": true },
+        "task_id": { "type": "integer", "required": true },
+        "completed_at": { "type": "timestamp", "required": true, "generated": true }
+      }
+    },
+    "reflections": {
+      "description": "계획 버전에 연결되는 돌아보기 기록",
+      "primary_key": "id",
+      "fields": {
+        "id": { "type": "integer", "generated": true },
+        "workspace_id": { "type": "string", "required": true },
+        "plan_version": { "type": "integer", "required": true },
+        "reflection_date": { "type": "date", "required": true },
+        "mood": { "type": "enum", "values": ["great", "good", "okay", "hard"], "required": true },
+        "went_well": { "type": "string", "required": true },
+        "next_action": { "type": "string", "required": true },
+        "created_at": { "type": "timestamp", "required": true, "generated": true }
+      }
+    }
+  },
+  "relationships": [
+    {
+      "from": "tasks.(workspace_id, plan_version)",
+      "to": "plan_versions.(workspace_id, version)",
+      "cardinality": "many-to-one",
+      "enforcement": "application"
+    },
+    {
+      "from": "reflections.(workspace_id, plan_version)",
+      "to": "plan_versions.(workspace_id, version)",
+      "cardinality": "many-to-one",
+      "enforcement": "application"
+    },
+    {
+      "from": "task_execution_logs.task_id",
+      "to": "tasks.id",
+      "cardinality": "many-to-one",
+      "on_delete": "cascade",
+      "enforcement": "database"
+    },
+    {
+      "from": "task_completion_events.task_id",
+      "to": "tasks.id",
+      "cardinality": "one-to-one",
+      "on_delete": "cascade",
+      "enforcement": "database"
+    }
+  ],
+  "export": {
+    "format": "pds-diary-export",
+    "media_type": "application/json",
+    "top_level_fields": ["format", "schema_version", "exported_at", "workspace_id", "timezone", "units", "data"],
+    "data_collections": ["plan_versions", "tasks", "task_execution_logs", "task_completion_events", "reflections"],
+    "excludes": ["Supabase URL", "publishable key", "secret key", "authorization headers"]
+  },
+  "security": {
+    "rendering": "사용자 입력은 textContent 또는 HTML 이스케이프 후 표시한다.",
+    "browser_allowed_key_prefix": "sb_publishable_",
+    "forbidden_secret_markers": ["service_role", "sb_secret_", "SUPABASE_SERVICE_ROLE_KEY", "JWT_SECRET"]
+  }
+}

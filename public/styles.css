@@ -74,6 +74,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .connection-badge.is-error { color: #a24638; border-color: #f0d2cb; background: #fff3f0; }
 .connection-badge.is-error .status-dot { background: var(--coral); box-shadow: 0 0 0 5px rgba(239,126,108,.12); }
 
+.public-access-warning { max-width: 1420px; margin: 0 auto 18px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 15px 16px; border: 1px solid #ead9ad; border-radius: 15px; color: #684d17; background: #fff9e9; }
+.public-access-warning-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: #b47a18; font-weight: 900; }
+.public-access-warning strong { font-size: .84rem; }
+.public-access-warning p { margin: 3px 0 0; font-size: .79rem; line-height: 1.5; }
+.export-button { border: 1px solid #d4b775; color: #684d17; background: #fff; white-space: nowrap; }
+.export-button:hover { border-color: #b47a18; background: #fffdf7; }
+.export-button:disabled { opacity: .58; cursor: wait; }
 .notice { max-width: 1420px; margin: 0 auto 18px; padding: 13px 16px; border: 1px solid #efdcae; border-radius: 12px; color: #755518; background: #fff8e7; font-size: .9rem; }
 .notice.error { border-color: #f3cac2; color: #9b4437; background: #fff2ef; }
 .notice.success { border-color: #cbe7dc; color: #176b50; background: #eff9f5; }
@@ -319,6 +326,8 @@ input:focus, textarea:focus, select:focus { border-color: #73bda2; }
   .page-header p:not(.eyebrow) { display: none; }
   .connection-badge { padding-inline: 12px; }
   .connection-badge #connection-label { max-width: 115px; overflow: hidden; text-overflow: ellipsis; }
+  .public-access-warning { grid-template-columns: auto minmax(0, 1fr); }
+  .public-access-warning .export-button { grid-column: 2; justify-self: start; }
   .dashboard-grid { grid-template-columns: 1fr; }
   .secondary-column { grid-template-columns: minmax(0, 1fr) minmax(250px, .7fr); }
   .history-card { min-height: 0; }
@@ -328,6 +337,8 @@ input:focus, textarea:focus, select:focus { border-color: #73bda2; }
   .page-header h1 { font-size: 1.56rem; }
   .eyebrow { display: none; }
   .connection-badge { min-height: 38px; }
+  .public-access-warning { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+  .public-access-warning .export-button { grid-column: 1 / -1; width: 100%; }
   .plan-card, .week-card, .task-card, .history-card, .growth-card { padding: 19px; }
   .plan-body { grid-template-columns: 1fr; }
   .progress-block { grid-template-columns: auto 1fr; justify-items: start; }
