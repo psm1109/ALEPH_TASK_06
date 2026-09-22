@@ -18,7 +18,43 @@
     <script src="./config.js"></script>
   </head>
   <body>
-    <div class="app-shell">
+    <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title">
+      <div class="auth-brand" aria-label="PDS Diary">
+        <span class="brand-mark" aria-hidden="true"><i></i><b></b></span>
+        <span>PDS Diary</span>
+      </div>
+
+      <div class="auth-card">
+        <div class="auth-intro">
+          <p class="eyebrow">PRIVATE DIARY</p>
+          <h1 id="auth-title">내 기록은 로그인한 나만 볼 수 있어요</h1>
+          <p>이메일과 비밀번호로 로그인하거나 새 계정을 만들어 시작하세요.</p>
+        </div>
+
+        <div class="auth-tabs" role="tablist" aria-label="계정 메뉴">
+          <button id="login-tab" class="auth-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="login-form">로그인</button>
+          <button id="signup-tab" class="auth-tab" type="button" role="tab" aria-selected="false" aria-controls="signup-form">가입</button>
+        </div>
+
+        <div id="auth-notice" class="auth-notice" role="status" aria-live="polite" hidden></div>
+
+        <form id="login-form" class="auth-form" novalidate>
+          <label>이메일<input name="email" type="email" autocomplete="email" required placeholder="name@example.com" /></label>
+          <label>비밀번호<input name="password" type="password" autocomplete="current-password" required /></label>
+          <button class="button primary" type="submit">로그인</button>
+        </form>
+
+        <form id="signup-form" class="auth-form" novalidate hidden>
+          <label>이메일<input name="email" type="email" autocomplete="email" required placeholder="name@example.com" /></label>
+          <label>비밀번호<input name="password" type="password" autocomplete="new-password" minlength="8" required /></label>
+          <label>비밀번호 확인<input name="password_confirm" type="password" autocomplete="new-password" minlength="8" required /></label>
+          <p class="auth-help">8자 이상으로 입력하세요. 비밀번호 원문은 다이어리 데이터베이스나 화면에 저장하지 않습니다.</p>
+          <button class="button primary" type="submit">계정 만들기</button>
+        </form>
+      </div>
+    </section>
+
+    <div id="app-shell" class="app-shell" hidden>
       <aside class="sidebar" aria-label="주요 메뉴">
         <a class="brand" href="#plan" aria-label="PDS Diary 홈">
           <span class="brand-mark" aria-hidden="true"><i></i><b></b></span>
@@ -60,13 +96,16 @@
           </div>
         </header>
 
-        <aside id="public-access-warning" class="public-access-warning" role="note" aria-label="공개 범위 안내">
-          <span class="public-access-warning-icon" aria-hidden="true">!</span>
+        <aside id="account-access-bar" class="account-access-bar" role="note" aria-label="로그인 계정 안내">
+          <span class="account-access-icon" aria-hidden="true">✓</span>
           <div>
-            <strong>공개 범위를 확인해 주세요</strong>
-            <p>지금은 로그인이 없어 링크를 아는 사람은 누구나 볼 수 있습니다. 남이 봐도 괜찮은 내용만 넣으세요</p>
+            <strong>내 계정으로 보호된 기록입니다</strong>
+            <p><span id="signed-in-email"></span> 계정의 자료만 불러옵니다.</p>
           </div>
-          <button id="export-data-button" class="button export-button" type="button">전체 자료 내보내기</button>
+          <div class="account-actions">
+            <button id="export-data-button" class="button export-button" type="button">전체 자료 내보내기</button>
+            <button id="logout-button" class="button secondary" type="button">로그아웃</button>
+          </div>
         </aside>
 
         <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>

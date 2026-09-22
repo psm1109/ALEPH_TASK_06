@@ -3,10 +3,11 @@
   "title": "PDS Diary 데이터 계약 v2",
   "version": "2.0.0",
   "workspace": {
-    "mode": "public-single-workspace",
-    "workspace_id": "ccna-main",
-    "authentication": false,
-    "notice": "지금은 로그인이 없어 링크를 아는 사람은 누구나 볼 수 있습니다. 남이 봐도 괜찮은 내용만 넣으세요"
+    "mode": "authenticated-per-user-workspace",
+    "workspace_id": "pds-main",
+    "authentication": "Supabase Auth email/password",
+    "ownership": "Every row user_id must equal auth.uid().",
+    "unauthenticated_access": "denied"
   },
   "date_rules": {
     "timezone": "Asia/Seoul",
@@ -24,9 +25,10 @@
     "plan_versions": {
       "description": "수정할 때 기존 행을 덮어쓰지 않는 계획 버전",
       "primary_key": "id",
-      "unique": [["workspace_id", "version"]],
+      "unique": [["user_id", "workspace_id", "version"]],
       "fields": {
         "id": { "type": "integer", "generated": true },
+        "user_id": { "type": "uuid", "required": true, "default": "auth.uid()" },
         "workspace_id": { "type": "string", "required": true },
         "version": { "type": "integer", "required": true, "minimum": 1 },
         "title": { "type": "string", "required": true },
@@ -42,9 +44,10 @@
     "tasks": {
       "description": "계획 버전에 딸린 할 일",
       "primary_key": "id",
-      "unique": [["workspace_id", "seed_key"]],
+      "unique": [["user_id", "workspace_id", "seed_key"]],
       "fields": {
         "id": { "type": "integer", "generated": true },
+        "user_id": { "type": "uuid", "required": true, "default": "auth.uid()" },
         "workspace_id": { "type": "string", "required": true },
         "plan_version": { "type": "integer", "required": true },
         "seed_key": { "type": ["string", "null"] },
@@ -64,6 +67,7 @@
       "primary_key": "id",
       "fields": {
         "id": { "type": "integer", "generated": true },
+        "user_id": { "type": "uuid", "required": true, "default": "auth.uid()" },
         "workspace_id": { "type": "string", "required": true },
         "task_id": { "type": "integer", "required": true },
         "start_time": { "type": "timestamp", "required": true },
@@ -76,9 +80,10 @@
     "task_completion_events": {
       "description": "할 일별로 한 번만 생기는 최초 완료 기록",
       "primary_key": "id",
-      "unique": [["workspace_id", "task_id"]],
+      "unique": [["user_id", "task_id"]],
       "fields": {
         "id": { "type": "integer", "generated": true },
+        "user_id": { "type": "uuid", "required": true, "default": "auth.uid()" },
         "workspace_id": { "type": "string", "required": true },
         "task_id": { "type": "integer", "required": true },
         "completed_at": { "type": "timestamp", "required": true, "generated": true }
@@ -94,6 +99,7 @@
       },
       "fields": {
         "id": { "type": "integer", "generated": true },
+        "user_id": { "type": "uuid", "required": true, "default": "auth.uid()" },
         "workspace_id": { "type": "string", "required": true },
         "plan_version": { "type": "integer", "required": true },
         "reflection_date": { "type": "date", "required": true },
@@ -141,6 +147,10 @@
     "excludes": ["Supabase URL", "publishable key", "secret key", "authorization headers"]
   },
   "security": {
+    "authentication_service": "Supabase Auth",
+    "client_library": "@supabase/supabase-js 2.116.0",
+    "authorization": "PostgreSQL RLS requires authenticated and user_id = auth.uid().",
+    "access_token_transport": "Authorization header only; never URL query parameters.",
     "rendering": "사용자 입력은 textContent 또는 HTML 이스케이프 후 표시한다.",
     "browser_allowed_key_prefix": "sb_publishable_",
     "forbidden_secret_markers": ["service_role", "sb_secret_", "SUPABASE_SERVICE_ROLE_KEY", "JWT_SECRET"]

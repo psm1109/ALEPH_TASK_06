@@ -1,8 +1,13 @@
-const WORKSPACE_ID = "ccna-main";
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/+esm";
+
+const WORKSPACE_ID = "pds-main";
 const EXPORT_SCHEMA_VERSION = "2.0.0";
+const GENERIC_LOGIN_ERROR = "이메일 또는 비밀번호를 확인해 주세요.";
 
 const state = {
   config: readConfig(),
+  authClient: null,
+  session: null,
   connected: false,
   loading: false,
   versions: [],
@@ -28,6 +33,15 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
 const elements = {
+  authScreen: $("#auth-screen"),
+  authNotice: $("#auth-notice"),
+  loginTab: $("#login-tab"),
+  signupTab: $("#signup-tab"),
+  loginForm: $("#login-form"),
+  signupForm: $("#signup-form"),
+  appShell: $("#app-shell"),
+  signedInEmail: $("#signed-in-email"),
+  logoutButton: $("#logout-button"),
   connectionStatus: $("#connection-status"),
   connectionLabel: $("#connection-label"),
   notice: $("#notice"),
@@ -39,7 +53,7 @@ const elements = {
   reflectionForm: $("#reflection-form"),
   taskForm: $("#task-form"),
   taskExecutionForm: $("#task-execution-form"),
-  publicAccessWarning: $("#public-access-warning"),
+  accountAccessBar: $("#account-access-bar"),
   exportDataButton: $("#export-data-button"),
 };
 
@@ -63,13 +77,140 @@ function hasConfig() {
   return Boolean(state.config?.url && state.config?.publishableKey);
 }
 
+function setAuthMode(mode) {
+  const isLogin = mode === "login";
+  elements.loginTab.classList.toggle("is-active", isLogin);
+  elements.signupTab.classList.toggle("is-active", !isLogin);
+  elements.loginTab.setAttribute("aria-selected", String(isLogin));
+  elements.signupTab.setAttribute("aria-selected", String(!isLogin));
+  elements.loginForm.hidden = !isLogin;
+  elements.signupForm.hidden = isLogin;
+  elements.authNotice.hidden = true;
+  const firstInput = (isLogin ? elements.loginForm : elements.signupForm).elements.email;
+  firstInput.focus({ preventScroll: true });
+}
+
+function showAuthNotice(message, type = "error") {
+  elements.authNotice.textContent = message;
+  elements.authNotice.className = `auth-notice${type === "success" ? " success" : ""}`;
+  elements.authNotice.hidden = false;
+}
+
+function clearDiaryState() {
+  state.connected = false;
+  state.versions = [];
+  state.reflections = [];
+  state.tasks = [];
+  state.taskExecutions = [];
+  state.completionEvents = [];
+  state.pendingTaskIds.clear();
+}
+
+function showSignedOutScreen(message = "") {
+  state.session = null;
+  clearDiaryState();
+  elements.appShell.hidden = true;
+  elements.authScreen.hidden = false;
+  elements.loginForm.reset();
+  elements.signupForm.reset();
+  setAuthMode("login");
+  if (message) showAuthNotice(message, "success");
+}
+
+async function showSignedInApp(session, { reload = true } = {}) {
+  state.session = session;
+  elements.signedInEmail.textContent = session.user.email || "로그인 사용자";
+  elements.authScreen.hidden = true;
+  elements.appShell.hidden = false;
+  if (reload) await connectAndLoad({ announce: false });
+}
+
+async function handleLoginSubmit(event) {
+  event.preventDefault();
+  if (!elements.loginForm.reportValidity() || !state.authClient) return;
+  const formData = new FormData(elements.loginForm);
+  setLoading(true);
+  elements.authNotice.hidden = true;
+  try {
+    const { data, error } = await state.authClient.auth.signInWithPassword({
+      email: String(formData.get("email") || "").trim(),
+      password: String(formData.get("password") || ""),
+    });
+    if (error || !data.session) {
+      showAuthNotice(GENERIC_LOGIN_ERROR);
+      return;
+    }
+    elements.loginForm.reset();
+    await showSignedInApp(data.session);
+    showNotice("로그인했습니다. 이 계정의 기록만 불러왔습니다.", "success", 3200);
+  } catch {
+    showAuthNotice(GENERIC_LOGIN_ERROR);
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function handleSignupSubmit(event) {
+  event.preventDefault();
+  if (!elements.signupForm.reportValidity() || !state.authClient) return;
+  const formData = new FormData(elements.signupForm);
+  const password = String(formData.get("password") || "");
+  if (password !== String(formData.get("password_confirm") || "")) {
+    showAuthNotice("비밀번호 확인 값이 서로 다릅니다.");
+    return;
+  }
+
+  setLoading(true);
+  elements.authNotice.hidden = true;
+  try {
+    const { data, error } = await state.authClient.auth.signUp({
+      email: String(formData.get("email") || "").trim(),
+      password,
+    });
+    if (error) {
+      showAuthNotice("가입 요청을 처리하지 못했습니다. 이미 가입했거나 입력 조건을 충족하지 않았을 수 있습니다.");
+      return;
+    }
+
+    elements.signupForm.reset();
+    if (data.session) {
+      await showSignedInApp(data.session);
+      showNotice("계정을 만들고 로그인했습니다. 이제 내 기록만 저장됩니다.", "success", 3800);
+      return;
+    }
+
+    setAuthMode("login");
+    showAuthNotice("가입 요청을 처리했습니다. 받은 편지함에서 확인한 뒤 로그인해 주세요.", "success");
+  } catch {
+    showAuthNotice("가입 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function handleLogout() {
+  if (!state.authClient) return;
+  elements.logoutButton.disabled = true;
+  try {
+    const { error } = await state.authClient.auth.signOut({ scope: "local" });
+    if (error) throw error;
+    showSignedOutScreen("로그아웃했습니다. 다시 로그인하기 전에는 자료를 열 수 없습니다.");
+  } catch {
+    showNotice("로그아웃하지 못했습니다. 네트워크 연결을 확인해 주세요.", "error");
+  } finally {
+    elements.logoutButton.disabled = false;
+  }
+}
+
 async function supabaseRequest(table, { method = "GET", query = "", body } = {}) {
   if (!hasConfig()) throw new Error("Supabase 연결 정보가 필요합니다.");
+  if (!state.session?.access_token) throw new Error("로그인이 필요합니다.");
 
   const response = await fetch(`${state.config.url}/rest/v1/${table}${query ? `?${query}` : ""}`, {
     method,
     headers: {
       apikey: state.config.publishableKey,
+      Authorization: `Bearer ${state.session.access_token}`,
       "Content-Type": "application/json",
       Prefer: ["POST", "PATCH"].includes(method) ? "return=representation" : "return=minimal",
     },
@@ -828,7 +969,7 @@ function switchView(view) {
   $$(".nav-item").forEach((button) => button.classList.remove("is-active"));
   const matchingNav = $(`.nav-item[data-view="${view}"]`);
   if (matchingNav) matchingNav.classList.add("is-active");
-  elements.publicAccessWarning.hidden = view !== "plan";
+  elements.accountAccessBar.hidden = view !== "plan";
   history.replaceState(null, "", `#${view}`);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -1081,6 +1222,11 @@ function requireConnection() {
 }
 
 function bindEvents() {
+  elements.loginTab.addEventListener("click", () => setAuthMode("login"));
+  elements.signupTab.addEventListener("click", () => setAuthMode("signup"));
+  elements.loginForm.addEventListener("submit", (event) => void handleLoginSubmit(event));
+  elements.signupForm.addEventListener("submit", (event) => void handleSignupSubmit(event));
+  elements.logoutButton.addEventListener("click", () => void handleLogout());
   $$('[data-close-dialog]').forEach((button) => button.addEventListener("click", () => {
     button.closest("dialog")?.close();
   }));
@@ -1394,12 +1540,43 @@ function bindEvents() {
   });
 }
 
-function initialize() {
+async function initialize() {
   bindEvents();
   renderAll();
   const route = location.hash.slice(1);
   if (["plan", "do", "see", "history"].includes(route)) switchView(route);
-  connectAndLoad({ announce: false });
+  if (!hasConfig()) {
+    showSignedOutScreen();
+    showAuthNotice("Supabase 연결 설정이 없습니다. public/config.js를 확인해 주세요.");
+    return;
+  }
+
+  state.authClient = createClient(state.config.url, state.config.publishableKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: false,
+    },
+  });
+
+  state.authClient.auth.onAuthStateChange((event, session) => {
+    if (event === "TOKEN_REFRESHED" && session) {
+      state.session = session;
+      return;
+    }
+    if (event === "SIGNED_OUT") {
+      window.setTimeout(() => {
+        if (state.session) showSignedOutScreen();
+      }, 0);
+    }
+  });
+
+  const { data, error } = await state.authClient.auth.getSession();
+  if (error || !data.session) {
+    showSignedOutScreen();
+    return;
+  }
+  await showSignedInApp(data.session);
 }
 
-initialize();
+void initialize();
