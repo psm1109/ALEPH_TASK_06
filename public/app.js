@@ -1,4 +1,5 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/+esm";
+import { encryptAuthCredentials } from "./auth-crypto.mjs";
 
 const WORKSPACE_ID = "pds-main";
 const EXPORT_SCHEMA_VERSION = "2.0.0";
@@ -77,6 +78,35 @@ function hasConfig() {
   return Boolean(state.config?.url && state.config?.publishableKey);
 }
 
+async function requestProtectedAuth(mode, email, password) {
+  const endpoint = `${state.config.url}/functions/v1/auth-gateway`;
+  const headers = { apikey: state.config.publishableKey };
+  const keyResponse = await fetch(endpoint, { headers, cache: "no-store" });
+  if (!keyResponse.ok) throw new Error("인증 보호 키를 불러오지 못했습니다.");
+  const { public_key: publicKey } = await keyResponse.json();
+  if (!publicKey) throw new Error("인증 보호 키가 올바르지 않습니다.");
+
+  const encrypted = await encryptAuthCredentials(publicKey, email, password);
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify({ mode, ...encrypted }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error("인증 요청을 처리하지 못했습니다.");
+  return payload;
+}
+
+async function persistProtectedSession(payload) {
+  if (!payload.access_token || !payload.refresh_token) return null;
+  const { data, error } = await state.authClient.auth.setSession({
+    access_token: payload.access_token,
+    refresh_token: payload.refresh_token,
+  });
+  if (error || !data.session) throw new Error("인증 세션을 저장하지 못했습니다.");
+  return data.session;
+}
+
 function setAuthMode(mode) {
   const isLogin = mode === "login";
   elements.loginTab.classList.toggle("is-active", isLogin);
@@ -132,16 +162,18 @@ async function handleLoginSubmit(event) {
   setLoading(true);
   elements.authNotice.hidden = true;
   try {
-    const { data, error } = await state.authClient.auth.signInWithPassword({
-      email: String(formData.get("email") || "").trim(),
-      password: String(formData.get("password") || ""),
-    });
-    if (error || !data.session) {
+    const payload = await requestProtectedAuth(
+      "login",
+      String(formData.get("email") || "").trim(),
+      String(formData.get("password") || ""),
+    );
+    const session = await persistProtectedSession(payload);
+    if (!session) {
       showAuthNotice(GENERIC_LOGIN_ERROR);
       return;
     }
     elements.loginForm.reset();
-    await showSignedInApp(data.session);
+    await showSignedInApp(session);
     showNotice("로그인했습니다. 이 계정의 기록만 불러왔습니다.", "success", 3200);
   } catch {
     showAuthNotice(GENERIC_LOGIN_ERROR);
@@ -166,18 +198,16 @@ async function handleSignupSubmit(event) {
   setLoading(true);
   elements.authNotice.hidden = true;
   try {
-    const { data, error } = await state.authClient.auth.signUp({
-      email: String(formData.get("email") || "").trim(),
+    const payload = await requestProtectedAuth(
+      "signup",
+      String(formData.get("email") || "").trim(),
       password,
-    });
-    if (error) {
-      showAuthNotice("가입 요청을 처리하지 못했습니다. 이미 가입했거나 입력 조건을 충족하지 않았을 수 있습니다.");
-      return;
-    }
+    );
+    const session = await persistProtectedSession(payload);
 
     elements.signupForm.reset();
-    if (data.session) {
-      await showSignedInApp(data.session);
+    if (session) {
+      await showSignedInApp(session);
       showNotice("계정을 만들고 로그인했습니다. 이제 내 기록만 저장됩니다.", "success", 3800);
       return;
     }

@@ -8,6 +8,8 @@
 
 - Supabase Auth 이메일·비밀번호 방식으로 가입, 로그인, 로그아웃합니다.
 - 브라우저 라이브러리는 `@supabase/supabase-js` `2.116.0`으로 고정했습니다.
+- 로그인·가입 자격 증명은 Web Crypto의 AES-256-GCM으로 암호화하고, 일회용 AES 키는 RSA-OAEP-256으로 다시 암호화해 `auth-gateway` Edge Function에 전달합니다.
+- 브라우저 네트워크 요청에는 이메일·비밀번호 필드 대신 `encrypted_key`, `iv`, `ciphertext`만 남습니다.
 - 로그인하지 않은 상태에서는 URL의 `#plan`, `#do`, `#see`, `#history`를 직접 열어도 다이어리 대신 로그인 화면이 나옵니다.
 - 모든 자료 요청은 세션 access token을 `Authorization` 헤더로 보내며 URL에는 싣지 않습니다.
 - 각 자료 행의 `user_id`가 서버의 `auth.uid()`와 같은지는 PostgreSQL RLS가 검사합니다.
@@ -17,7 +19,8 @@
 
 - 비밀번호 저장과 검증은 직접 구현하지 않고 Supabase Auth에 맡깁니다.
 - Supabase Auth는 비밀번호를 계정별 무작위 salt가 포함된 bcrypt 해시로 `auth.users.encrypted_password`에 저장합니다.
-- 앱은 인증 요청이나 응답 본문을 콘솔에 기록하지 않으며, 인증 시도 뒤 비밀번호 입력칸을 비웁니다.
+- 앱과 `auth-gateway`는 인증 요청이나 응답 본문을 로그에 기록하지 않으며, 인증 시도 뒤 비밀번호 입력칸을 비웁니다.
+- Edge Function은 Supabase Auth 오류 본문을 브라우저로 전달하지 않고 일반화된 실패 응답만 반환하며, 성공 시 세션에 필요한 허용 목록 필드만 반환합니다.
 - 같은 비밀번호로 만든 두 시험 계정의 해시 확인은 SQL Editor 전용 [`supabase/card2-password-evidence.sql`](supabase/card2-password-evidence.sql)을 사용합니다. 이 파일에는 비밀번호를 적지 않습니다.
 
 ## 주요 기능
@@ -64,7 +67,24 @@
 3. [`public/config.js`](public/config.js)에 Project URL과 `sb_publishable_...` 형식의 Publishable key를 설정합니다.
 4. 가입 화면에서 기존 자료를 소유할 본인 계정을 만듭니다.
 5. [`supabase/card1-migrate-existing-data.sql`](supabase/card1-migrate-existing-data.sql)의 `OWNER_EMAIL@example.com` 두 곳을 그 계정 이메일로 바꿔 SQL Editor에서 한 번 실행합니다.
-6. `public` 디렉터리를 정적 웹 루트로 실행하거나 배포합니다.
+6. 아래의 인증 게이트웨이 설정을 완료합니다.
+7. `public` 디렉터리를 정적 웹 루트로 실행하거나 배포합니다.
+
+### 인증 게이트웨이 설정
+
+로그인·가입 Request Payload에 비밀번호 원문을 남기지 않으려면 정적 웹 배포와 함께 Edge Function이 반드시 배포되어야 합니다.
+
+```powershell
+node scripts/generate-auth-key.mjs
+supabase secrets set --env-file supabase/.env.auth.local --project-ref YOUR_PROJECT_REF
+supabase secrets set AUTH_ALLOWED_ORIGIN=https://YOUR_DEPLOYED_ORIGIN --project-ref YOUR_PROJECT_REF
+supabase functions deploy auth-gateway --project-ref YOUR_PROJECT_REF
+```
+
+- `supabase/.env.auth.local`은 Git에서 제외되며 내용을 문서·로그·채팅에 복사하지 않습니다.
+- `AUTH_ALLOWED_ORIGIN`은 실제 웹 앱의 정확한 origin으로 지정합니다. 로컬에서 별도 Supabase 프로젝트를 쓸 때만 로컬 origin을 설정합니다.
+- 키를 다시 생성했다면 새 secret을 적용한 직후 함수를 다시 배포합니다.
+- 함수가 배포되지 않았거나 secret이 없으면 로그인·가입은 안전하게 실패하며 Supabase Auth로 직접 우회하지 않습니다.
 
 ```js
 window.__PDS_CONFIG__ = {
@@ -94,9 +114,14 @@ python -m http.server 4173 --directory public
 ├─ public/
 │  ├─ index.html       # 화면 구조와 입력 모달
 │  ├─ styles.css       # 레이아웃, 반응형 UI, 커서 규칙
+│  ├─ auth-crypto.mjs  # 인증 Payload 하이브리드 암호화
 │  ├─ app.js           # 인증 상태, Plan·Do·See 상태와 Supabase REST 처리
 │  └─ config.js        # Project URL과 Publishable key
+├─ scripts/
+│  └─ generate-auth-key.mjs # Git 제외 대상 RSA 비밀키 파일 생성
 ├─ supabase/
+│  ├─ config.toml      # auth-gateway의 공개 호출 설정
+│  ├─ functions/auth-gateway/index.ts # 암호화된 인증 요청 중계
 │  ├─ schema.sql       # 사용자 소유권 열, RLS, 완료 중복 방지
 │  └─ card1-migrate-existing-data.sql # 기존 pds-main 자료 소유자 이관
 └─ contracts/
@@ -120,4 +145,7 @@ python -m http.server 4173 --directory public
 ```bash
 node tests/card1-static.test.cjs
 node tests/card2-password.test.cjs
+node tests/auth-crypto.test.mjs
 ```
+
+배포 후 개발자 도구에서 로그인 요청을 확인할 때 `auth-gateway` POST의 Payload에는 `mode`, `encrypted_key`, `iv`, `ciphertext`만 있어야 합니다. `password` 필드나 입력한 비밀번호 원문이 보이면 통과로 판정하지 않습니다. Response·Console·화면과 Supabase Edge Function 로그에도 원문이 없어야 합니다.

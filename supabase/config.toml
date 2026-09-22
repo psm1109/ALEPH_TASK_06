@@ -1,0 +1,2 @@
+[functions.auth-gateway]
+verify_jwt = false

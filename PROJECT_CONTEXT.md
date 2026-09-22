@@ -1,14 +1,13 @@
 # PDS Diary 프로젝트 인계 문서
 
-마지막 수정: 2026-09-22 (Asia/Seoul)
+마지막 수정: 2026-09-23 (Asia/Seoul)
 
 ## Git 상태
 
 - 저장소: `psm1109/ALEPH_TASK_06`
 - 작업 브랜치: `codex/card-1-auth`
-- 이 문서가 다루는 최신 기능 커밋: `109955d`
-- 직전 인계 문서 커밋: `cdc3f33`
-- 이번 작업에서는 `AGENTS.md`의 인계·보안·커밋·답변 규칙을 한글로 재정리했습니다. 작업 후 최신 HEAD는 `git rev-parse --short HEAD`로 확인합니다.
+- 현재 기준 커밋: `7abcbb0`
+- 작업 트리에는 로그인·가입 자격 증명의 네트워크 원문 노출 방지 변경이 아직 커밋되지 않은 상태로 있습니다.
 - 원격 추적 브랜치: `origin/codex/card-1-auth`
 - 고정된 최종 T06 조상 커밋: `bab809b`
 - 현재 브랜치에는 병합 커밋 `59530ab`과 카드 1의 과거 커밋 두 개가 함께 있습니다. 앞으로는 현재 브랜치의 최신 파일과 HEAD를 기준으로 작업합니다.
@@ -60,8 +59,11 @@
 ### 카드 2 — 비밀번호 보관 검증 준비
 
 - 비밀번호 저장과 비교는 직접 구현하지 않고 Supabase Auth에 맡겼습니다.
+- 브라우저의 Supabase Auth 직접 로그인·가입 호출을 제거했습니다.
+- 브라우저는 자격 증명을 AES-256-GCM으로 암호화하고, 일회용 AES 키를 RSA-OAEP-256으로 암호화해 `auth-gateway` Edge Function에 보냅니다.
+- 네트워크 Request Payload에는 `mode`, `encrypted_key`, `iv`, `ciphertext`만 포함하며 이메일·비밀번호 필드를 넣지 않습니다.
+- `auth-gateway`는 요청·응답 본문을 로그에 남기지 않고, Auth 오류 상세를 폐기하며 성공 응답도 세션 허용 목록 필드만 반환합니다.
 - 가입·로그인 시도가 끝나면 비밀번호 입력칸을 비웁니다.
-- 앱에는 인증 요청이나 응답을 남기는 콘솔 기록 코드가 없습니다.
 - 두 시험 계정의 bcrypt 해시를 표시하고 서로 다른지 확인하는 SQL Editor용 쿼리를 추가했습니다.
 - 비밀번호·토큰을 가리는 제출문 초안을 추가했습니다.
 
@@ -70,6 +72,11 @@
 - `supabase/card2-password-evidence.sql`
 - `docs/card-2-password.md`
 - `tests/card2-password.test.cjs`
+- `tests/auth-crypto.test.mjs`
+- `public/auth-crypto.mjs`
+- `supabase/functions/auth-gateway/index.ts`
+- `supabase/config.toml`
+- `scripts/generate-auth-key.mjs`
 - `contracts/pds-schema-v2.json`
 - `README.md`
 
@@ -80,18 +87,22 @@
 ```powershell
 node tests\card1-static.test.cjs
 node tests\card2-password.test.cjs
+node tests\auth-crypto.test.mjs
 node --check public\app.js
 git diff --check
 ```
 
-2026-09-22 마지막 실행 결과:
+2026-09-23 마지막 실행 결과:
 
 - 카드 1 정적 검사: 20개 통과
-- 카드 2 비밀번호 검사: 13개 통과
+- 카드 2 비밀번호 검사: 23개 통과
+- 인증 Payload 암호화 실행 검사: 5개 통과
 - `public/app.js` 문법 검사: 통과
-- 로컬 브라우저에서 `http://127.0.0.1:4173/#plan` 직접 접근: 자료 대신 로그인 화면 표시
-- 로컬 로그인 실패 검사: 요청 후 비밀번호 입력칸이 비워짐
-- 같은 검사 중 브라우저 콘솔 기록: 0건
+- `scripts/generate-auth-key.mjs` 문법 검사: 통과
+- RSA-OAEP-256 + AES-256-GCM 암호화·복호화 로컬 왕복 검사: 통과
+- `git diff --check`: 통과(LF→CRLF 안내만 표시)
+
+이전 2026-09-22 브라우저 검사에서는 로그인 화면 보호, 실패 후 입력칸 초기화, 콘솔 0건을 확인했습니다. 2026-09-23 게이트웨이 변경은 아직 운영 Edge Function에 배포하지 않았으므로 실제 브라우저 네트워크 검사는 미실행입니다.
 
 ## 아직 필요한 실제 확인
 
@@ -103,8 +114,10 @@ git diff --check
 4. `supabase/card1-migrate-existing-data.sql`에서 본인 계정 이메일 자리만 바꾼 뒤 실행합니다.
 5. `supabase/card2-password-evidence.sql`에서 시험 계정 이메일 두 곳만 바꾼 뒤 실행합니다.
 6. 출력된 bcrypt 해시를 `docs/card-2-password.md`에 옮깁니다. 해시는 과제에서 요구한 증거이지만 비밀번호·토큰·키는 계속 가립니다.
-7. 로그인 요청·응답 기록을 가린 상태로 남기고, 응답·화면·콘솔에 비밀번호 원문이 없는지 확인합니다.
-8. RLS 적용 후 로그인하지 않은 REST 요청을 다시 보내 실제 응답을 기록합니다. 마지막 적용 전 확인에서는 빈 배열과 HTTP 200이 돌아왔으므로, 그 결과는 보호 근거가 아니라 실패 상태의 기준점입니다.
+7. `node scripts/generate-auth-key.mjs`로 Git 제외 대상 `supabase/.env.auth.local`을 만들고, 내용을 출력하지 않은 채 `AUTH_PRIVATE_JWK_B64` secret을 운영 Supabase에 설정합니다.
+8. 운영 웹 origin을 `AUTH_ALLOWED_ORIGIN`으로 설정한 뒤 `auth-gateway` Edge Function을 배포합니다. 현재 PC에는 Supabase CLI가 설치되어 있지 않아 미실행입니다.
+9. 배포된 앱에서 로그인 요청 Payload가 `mode`, `encrypted_key`, `iv`, `ciphertext`만 포함하는지 확인합니다. Response·Console·화면·Edge Function 로그에서 시험 비밀번호 원문을 검색해 모두 0건인지 확인합니다.
+10. RLS 적용 후 로그인하지 않은 REST 요청을 다시 보내 실제 응답을 기록합니다. 마지막 적용 전 확인에서는 빈 배열과 HTTP 200이 돌아왔으므로, 그 결과는 보호 근거가 아니라 실패 상태의 기준점입니다.
 
 ## 기존 자료 관련 주의사항
 
@@ -119,4 +132,4 @@ git diff --check
 
 ## 다음 작업
 
-카드 3의 세션 폐기 작업을 시작하기 전에 위의 카드 1·2 실제 검증을 마칩니다. 작업 단위가 끝날 때마다 `AGENTS.md` 규칙에 따라 이 문서를 다시 갱신합니다.
+먼저 인증 비밀키를 운영 Supabase secret으로 설정하고 `auth-gateway`를 배포합니다. 이어서 실제 로그인으로 네트워크 요청·응답, 화면, 콘솔, Edge Function 로그의 비밀번호 원문 0건을 확인합니다. 그 뒤 카드 1·2의 나머지 실제 검증을 마치고 카드 3 세션 폐기 작업을 시작합니다.

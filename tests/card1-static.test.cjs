@@ -17,8 +17,10 @@ assert.match(html, /id="logout-button"/);
 assert.match(html, /id="app-shell" class="app-shell" hidden/);
 
 assert.match(app, /@supabase\/supabase-js@2\.116\.0/);
-assert.match(app, /signUp\(/);
-assert.match(app, /signInWithPassword\(/);
+assert.match(app, /requestProtectedAuth\(/);
+assert.doesNotMatch(app, /\.auth\.signUp\(/);
+assert.doesNotMatch(app, /\.auth\.signInWithPassword\(/);
+assert.match(app, /\.auth\.setSession\(/);
 assert.match(app, /signOut\(/);
 assert.match(app, /Authorization: `Bearer \$\{state\.session\.access_token\}`/);
 assert.match(app, /const GENERIC_LOGIN_ERROR = "이메일 또는 비밀번호를 확인해 주세요\."/);
@@ -31,7 +33,7 @@ assert.doesNotMatch(schema, /create policy\s+"public [^"]+"/i);
 assert.match(migration, /where workspace_id = 'pds-main' and user_id is null/);
 assert.match(migration, /alter column user_id set not null/);
 
-for (const publicFile of ["public/index.html", "public/styles.css", "public/app.js", "public/config.js"]) {
+for (const publicFile of ["public/index.html", "public/styles.css", "public/app.js", "public/auth-crypto.mjs", "public/config.js"]) {
   const source = read(publicFile);
   assert.doesNotMatch(source, /sb_secret_|service_role|JWT_SECRET/i, `${publicFile} contains a forbidden secret marker`);
 }
