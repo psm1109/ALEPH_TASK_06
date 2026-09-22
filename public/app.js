@@ -455,7 +455,6 @@ function renderTasks() {
           </div>
         </div>
         <div class="task-actions">
-          <button class="task-icon-button record" type="button" data-action="record-execution" data-task-id="${taskId}" aria-label="실행 기록 남기기: ${escapeHTML(task.title)}">기록</button>
           <button class="task-icon-button" type="button" data-action="edit-task" data-task-id="${taskId}" aria-label="할 일 수정: ${escapeHTML(task.title)}">수정</button>
           <button class="task-icon-button delete" type="button" data-action="delete-task" data-task-id="${taskId}" aria-label="할 일 삭제: ${escapeHTML(task.title)}">삭제</button>
         </div>
@@ -597,7 +596,7 @@ function renderSeeEvidence(summary) {
           <span>실제 ${formatMinutes(actualMinutes)}</span>
           <span>차이 ${formatSignedMinutes(gapMinutes)}</span>
         </div>
-        ${blockers.length ? `<p><strong>막힘 근거</strong> · ${blockers.map(escapeHTML).join(" · ")}</p>` : ""}
+        ${blockers.length ? `<p><strong>막힘 이유</strong> · ${blockers.map(escapeHTML).join(" · ")}</p>` : ""}
       </article>
     `;
   }).join("");
@@ -1165,7 +1164,6 @@ function bindEvents() {
       return;
     }
     const task = findTask(button.dataset.taskId);
-    if (button.dataset.action === "record-execution" && task) openTaskExecutionDialog(task);
     if (button.dataset.action === "edit-task" && task) openTaskDialog(task);
     if (button.dataset.action === "delete-task") void deleteTask(button.dataset.taskId);
   });

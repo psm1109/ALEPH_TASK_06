@@ -111,7 +111,6 @@
                     </div>
                     <div class="plan-actions">
                       <button id="edit-plan-button" class="button primary" type="button">＋ 첫 계획 세우기</button>
-                      <button class="button primary" data-open-task-execution data-plan-required type="button" disabled>▷ 실행 기록 남기기</button>
                     </div>
                   </div>
                 </div>
@@ -123,10 +122,10 @@
                   <span id="week-range" class="muted"></span>
                 </div>
                 <div id="week-grid" class="week-grid"></div>
-                <button id="week-empty" class="empty-action" data-open-task-execution data-plan-required type="button" disabled>
+                <div id="week-empty" class="empty-action">
                   <span aria-hidden="true">▧</span>
-                  <span><strong>아직 실행 기록이 없어요</strong><small>첫 학습을 기록해 보세요</small></span>
-                </button>
+                  <span><strong>아직 실행 기록이 없어요</strong><small>실행 Do 탭에서 첫 기록을 남겨 보세요</small></span>
+                </div>
               </article>
 
               <article class="card task-card">
@@ -248,7 +247,6 @@
           <article class="card next-plan-card">
             <div><span class="section-kicker">NEXT PLAN</span><h2>다음 계획으로 넘길 한 줄</h2></div>
             <p id="next-plan-note">아직 정한 고칠 점이 없습니다.</p>
-            <button class="button secondary" data-open-reflection data-plan-required type="button" disabled>회고에서 정하기</button>
           </article>
           <div id="reflection-list" class="record-list"></div>
         </section>
