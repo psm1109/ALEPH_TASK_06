@@ -10,6 +10,7 @@ const initialPlan = {
   priority: "high",
   success_criteria: "CCNA 자격증 취득",
   expected_days: 40,
+  carryover_note: "",
   created_at: "2026-09-21T00:00:00+09:00",
 };
 
@@ -43,6 +44,7 @@ const state = {
   completionEvents: [],
   editingTaskId: null,
   editingExecutionId: null,
+  seeEvidenceType: "planned",
   pendingTaskIds: new Set(),
   taskQuery: {
     search: "",
@@ -235,6 +237,19 @@ function toISODate(date) {
   return `${year}-${month}-${day}`;
 }
 
+function toSeoulISODate(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 function executionDate(executionLog) {
   const date = new Date(executionLog.start_time);
   return Number.isNaN(date.getTime()) ? "" : toISODate(date);
@@ -265,7 +280,7 @@ function formatTime(value) {
 function formatExecutionDate(value) {
   const date = parseLocalDate(value);
   const weekday = new Intl.DateTimeFormat("ko-KR", { weekday: "short" }).format(date);
-  const todayLabel = value === toISODate(new Date()) ? " · 오늘" : "";
+  const todayLabel = value === toSeoulISODate() ? " · 오늘" : "";
   return `${formatDate(value)} (${weekday})${todayLabel}`;
 }
 
@@ -301,6 +316,11 @@ function renderPlan() {
   const priorityMap = { high: "높음", medium: "보통", low: "낮음" };
   priority.textContent = priorityMap[plan.priority] || plan.priority;
   priority.className = `priority ${plan.priority}`;
+
+  const carryover = $("#plan-carryover");
+  const carryoverNote = String(plan.carryover_note || "").trim();
+  carryover.hidden = !carryoverNote;
+  $("#plan-carryover-note").textContent = carryoverNote;
 
   $("#progress-caption").innerHTML = completedDays
     ? `${completedDays}일의 실행을 쌓았어요.<br />오늘도 흐름을 이어가요.`
@@ -390,9 +410,7 @@ function formatMinutes(value) {
 }
 
 function isOverdue(task) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return !task.is_completed && parseLocalDate(task.due_date) < today;
+  return !task.is_completed && String(task.due_date).slice(0, 10) < toSeoulISODate();
 }
 
 function renderTasks() {
@@ -528,20 +546,160 @@ function renderTaskExecutions() {
   }).join("");
 }
 
-function renderCompletionSummary() {
-  const totalMinutes = state.taskExecutions.reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0);
-  $("#see-completion-count").textContent = state.completionEvents.length;
-  $("#see-execution-count").textContent = state.taskExecutions.length;
-  $("#see-actual-time").textContent = formatMinutes(totalMinutes || 0);
+function actualMinutesForTask(taskId) {
+  return state.taskExecutions
+    .filter((log) => String(log.task_id) === String(taskId))
+    .reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0);
+}
 
-  const list = $("#completion-event-list");
-  if (!state.completionEvents.length) {
-    list.innerHTML = '<div class="task-empty"><strong>아직 완료 기록이 없어요</strong><p>할 일을 완료하면 항목별로 한 번만 집계됩니다.</p></div>';
+function isMeaningfulBlocker(value) {
+  const normalized = String(value || "").trim().toLocaleLowerCase("ko");
+  return Boolean(normalized) && !["없음", "없었음", "없어요", "none", "n/a", "-"].includes(normalized);
+}
+
+function blockerReasonsForTask(taskId) {
+  return [...new Set(state.taskExecutions
+    .filter((log) => String(log.task_id) === String(taskId) && isMeaningfulBlocker(log.blocker_reason))
+    .map((log) => String(log.blocker_reason).trim()))];
+}
+
+function formatSignedMinutes(value) {
+  const minutes = Number(value || 0);
+  if (!minutes) return "0분";
+  return `${minutes > 0 ? "+" : "−"}${formatMinutes(Math.abs(minutes))}`;
+}
+
+function getSeeSummary() {
+  const tasks = [...state.tasks];
+  const completedTasks = tasks.filter((task) => task.is_completed);
+  const overdueTasks = tasks.filter(isOverdue);
+  const blockedTasks = tasks.filter((task) => blockerReasonsForTask(task.id).length > 0);
+  const expectedMinutes = tasks.reduce((sum, task) => sum + Number(task.estimated_minutes || 0), 0);
+  const actualMinutes = state.taskExecutions.reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0);
+  return {
+    tasks,
+    completedTasks,
+    overdueTasks,
+    blockedTasks,
+    expectedMinutes,
+    actualMinutes,
+    gapMinutes: actualMinutes - expectedMinutes,
+  };
+}
+
+function renderSeeEvidence(summary) {
+  const definitions = {
+    planned: { title: "계획 수의 근거 기록", description: "현재 계획에 연결된, 삭제되지 않은 모든 할 일입니다.", tasks: summary.tasks },
+    completed: { title: "완료 수의 근거 기록", description: "지금 완료 체크가 유지된 할 일만 포함합니다.", tasks: summary.completedTasks },
+    overdue: { title: "지연 수의 근거 기록", description: "완료되지 않았고 마감일이 서울 기준 오늘보다 앞선 할 일입니다.", tasks: summary.overdueTasks },
+    blocked: { title: "막힘 수의 근거 기록", description: "실행 기록에 실제 막힌 이유가 한 번이라도 남은 할 일입니다.", tasks: summary.blockedTasks },
+    expected: { title: "예상 시간의 근거 기록", description: "각 할 일에 저장된 예상 시간의 합계입니다.", tasks: summary.tasks },
+    actual: { title: "실제 시간의 근거 기록", description: "실행 기록이 있는 할 일별 실제 시간 합계입니다.", tasks: summary.tasks.filter((task) => actualMinutesForTask(task.id) > 0) },
+    gap: { title: "예상 대비 차이의 근거 기록", description: "할 일별 실제 시간에서 예상 시간을 뺀 값입니다.", tasks: summary.tasks },
+  };
+  const selected = definitions[state.seeEvidenceType] || definitions.planned;
+  $("#see-evidence-title").textContent = selected.title;
+  $("#see-evidence-description").textContent = selected.description;
+  $("#see-evidence-count").textContent = `${selected.tasks.length}건`;
+  $$("#see-metrics [data-see-evidence]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.seeEvidence === state.seeEvidenceType);
+  });
+
+  const list = $("#see-evidence-list");
+  if (!selected.tasks.length) {
+    list.innerHTML = '<div class="task-empty"><strong>해당하는 근거 기록이 없어요</strong><p>조건에 맞는 할 일이 생기면 여기에 표시됩니다.</p></div>';
     return;
   }
-  list.innerHTML = state.completionEvents.map((event) => `
-    <div class="completion-event"><strong>✓ ${escapeHTML(taskTitle(event.task_id))}</strong><time>${formatTimestamp(event.completed_at)}</time></div>
-  `).join("");
+
+  list.innerHTML = selected.tasks.map((task) => {
+    const actualMinutes = actualMinutesForTask(task.id);
+    const gapMinutes = actualMinutes - Number(task.estimated_minutes || 0);
+    const blockers = blockerReasonsForTask(task.id);
+    return `
+      <article class="see-evidence-item">
+        <div class="see-evidence-main">
+          <strong>${escapeHTML(task.title)}</strong>
+          <span class="see-status ${task.is_completed ? "completed" : isOverdue(task) ? "overdue" : "active"}">${task.is_completed ? "완료" : isOverdue(task) ? "지연" : "진행 중"}</span>
+        </div>
+        <div class="see-evidence-values">
+          <span>마감 ${formatDate(task.due_date)}</span>
+          <span>예상 ${formatMinutes(task.estimated_minutes)}</span>
+          <span>실제 ${formatMinutes(actualMinutes)}</span>
+          <span>차이 ${formatSignedMinutes(gapMinutes)}</span>
+        </div>
+        ${blockers.length ? `<p><strong>막힘 근거</strong> · ${blockers.map(escapeHTML).join(" · ")}</p>` : ""}
+      </article>
+    `;
+  }).join("");
+}
+
+function renderCompletionHistory(summary) {
+  const list = $("#completion-event-list");
+  if (!summary.completedTasks.length) {
+    list.innerHTML = '<div class="task-empty"><strong>현재 완료된 할 일이 없어요</strong><p>완료 체크가 유지된 할 일만 여기에 표시됩니다.</p></div>';
+    return;
+  }
+
+  const groups = new Map();
+  [...summary.completedTasks]
+    .sort((a, b) => new Date(b.completed_at || b.updated_at || b.created_at) - new Date(a.completed_at || a.updated_at || a.created_at))
+    .forEach((task) => {
+      const date = toSeoulISODate(task.completed_at || task.updated_at || task.created_at);
+      if (!groups.has(date)) groups.set(date, []);
+      groups.get(date).push(task);
+    });
+  const today = toSeoulISODate();
+
+  list.innerHTML = [...groups.entries()].map(([date, tasks]) => {
+    const dateActualMinutes = tasks.reduce((sum, task) => sum + actualMinutesForTask(task.id), 0);
+    return `
+      <details class="execution-date-group completion-date-group" ${date === today ? "open" : ""}>
+        <summary>
+          <span class="execution-date-heading"><strong>${formatExecutionDate(date)}</strong><small>${tasks.length}건 완료</small></span>
+          <span class="execution-date-total">총 ${formatMinutes(dateActualMinutes)}</span>
+        </summary>
+        <div class="completion-date-list">
+          ${tasks.map((task) => {
+            const actualMinutes = actualMinutesForTask(task.id);
+            return `
+              <article class="completion-task-card">
+                <div><strong>✓ ${escapeHTML(task.title)}</strong><small>${formatTime(task.completed_at || task.updated_at || task.created_at)} 완료</small></div>
+                <div class="completion-task-times">
+                  <span>예상 ${formatMinutes(task.estimated_minutes)}</span>
+                  <strong>실행 기록 합계 ${formatMinutes(actualMinutes)}</strong>
+                  <span>차이 ${formatSignedMinutes(actualMinutes - Number(task.estimated_minutes || 0))}</span>
+                </div>
+              </article>
+            `;
+          }).join("")}
+        </div>
+      </details>
+    `;
+  }).join("");
+}
+
+function latestPlanImprovement() {
+  return state.reflections.find((reflection) =>
+    Number(reflection.plan_version) === Number(currentPlan().version) && String(reflection.next_action || "").trim(),
+  );
+}
+
+function renderCompletionSummary() {
+  const summary = getSeeSummary();
+  const plan = currentPlan();
+  $("#see-period-label").textContent = `${formatDate(plan.start_date)} – ${formatDate(plan.end_date)}`;
+  $("#see-plan-count").textContent = summary.tasks.length;
+  $("#see-completion-count").textContent = summary.completedTasks.length;
+  $("#see-overdue-count").textContent = summary.overdueTasks.length;
+  $("#see-blocked-count").textContent = summary.blockedTasks.length;
+  $("#see-expected-time").textContent = formatMinutes(summary.expectedMinutes);
+  $("#see-actual-time").textContent = formatMinutes(summary.actualMinutes);
+  $("#see-time-gap").textContent = formatSignedMinutes(summary.gapMinutes);
+  renderSeeEvidence(summary);
+  renderCompletionHistory(summary);
+
+  const improvement = latestPlanImprovement();
+  $("#next-plan-note").textContent = improvement?.next_action || "아직 정한 고칠 점이 없습니다.";
 }
 
 function renderTimeline() {
@@ -563,7 +721,7 @@ function renderTimeline() {
 function renderReflections() {
   const list = $("#reflection-list");
   if (!state.reflections.length) {
-    list.innerHTML = emptyState("◌", "아직 작성한 회고가 없어요", "잘한 점과 다음 행동을 정리해 보세요.");
+    list.innerHTML = emptyState("◌", "아직 작성한 회고가 없어요", "잘한 점과 다음 계획으로 넘길 고칠 점을 정리해 보세요.");
     return;
   }
 
@@ -573,7 +731,7 @@ function renderReflections() {
       <span class="record-icon" aria-hidden="true">◌</span>
       <div class="record-copy">
         <h3>${formatDate(item.reflection_date)} · ${moodMap[item.mood] || item.mood}</h3>
-        <p><strong>잘한 점</strong> · ${escapeHTML(item.went_well)}<br /><strong>다음 행동</strong> · ${escapeHTML(item.next_action)}</p>
+        <p><strong>잘한 점</strong> · ${escapeHTML(item.went_well)}<br /><strong>다음 계획으로 넘길 고칠 점</strong> · ${escapeHTML(item.next_action)}</p>
       </div>
       <div class="record-meta">계획 v${item.plan_version}<br />${formatTimestamp(item.created_at)}</div>
     </article>
@@ -592,6 +750,7 @@ function renderFullHistory() {
           <span>우선순위 ${priorityLabel(version.priority)}</span>
           <span>예상 ${version.expected_days}일</span>
           <span>성공 기준 · ${escapeHTML(version.success_criteria)}</span>
+          ${version.carryover_note ? `<span>이전 회고 · ${escapeHTML(version.carryover_note)}</span>` : ""}
         </div>
       </div>
       <time class="record-meta">${formatTimestamp(version.created_at) || "미연결 미리보기"}</time>
@@ -773,6 +932,7 @@ async function updateTask(taskId, changes, successMessage) {
     if (!saved) throw new Error("변경된 할 일을 찾지 못했습니다.");
     state.tasks = state.tasks.map((task) => String(task.id) === String(taskId) ? saved : task);
     renderTasks();
+    renderCompletionSummary();
     showNotice(successMessage, "success", 2600);
     return saved;
   } catch (error) {
@@ -825,13 +985,22 @@ function bindEvents() {
     fillPlanForm();
     elements.planDialog.showModal();
   });
-  $("#add-reflection-button").addEventListener("click", () => {
+  $$('[data-open-reflection]').forEach((button) => button.addEventListener("click", () => {
     if (!requireConnection()) return;
     elements.reflectionForm.reset();
-    elements.reflectionForm.elements.reflection_date.value = toISODate(new Date());
+    elements.reflectionForm.elements.reflection_date.value = toSeoulISODate();
     elements.reflectionDialog.showModal();
-  });
+  }));
   $("#add-task-button").addEventListener("click", () => openTaskDialog());
+
+  $("#see-metrics").addEventListener("click", (event) => {
+    const metric = event.target.closest("[data-see-evidence]");
+    if (!metric) return;
+    state.seeEvidenceType = metric.dataset.seeEvidence;
+    renderCompletionSummary();
+    $("#see-evidence-card").scrollIntoView({ behavior: "smooth", block: "start" });
+    $("#see-evidence-card").focus({ preventScroll: true });
+  });
 
   $("#task-search").addEventListener("input", (event) => {
     state.taskQuery.search = event.target.value;
@@ -875,7 +1044,7 @@ function bindEvents() {
         is_completed: completed,
         completed_at: completed ? new Date().toISOString() : null,
       }, completed ? "할 일을 완료로 변경했습니다." : "할 일을 다시 진행 중으로 되돌렸습니다.");
-      if (saved && completed) await refreshCompletionEvents();
+      if (saved) await refreshCompletionEvents();
     } catch (error) {
       showNotice(`완료 집계를 불러오지 못했습니다. ${error.message}`, "error");
     } finally {
@@ -936,6 +1105,7 @@ function bindEvents() {
       state.tasks.push(saved);
       elements.taskDialog.close();
       renderTasks();
+      renderCompletionSummary();
       showNotice("새 할 일을 만들었습니다.", "success", 2600);
     } catch (error) {
       showNotice(`할 일을 만들지 못했습니다. ${error.message}`, "error");
@@ -1034,12 +1204,17 @@ function bindEvents() {
         priority: data.priority,
         success_criteria: data.success_criteria.trim(),
         expected_days: Number(data.expected_days),
+        carryover_note: latestPlanImprovement()?.next_action || "",
       };
       const [saved] = await supabaseRequest("plan_versions", { method: "POST", body: [plan] });
       state.versions.unshift(saved);
       elements.planDialog.close();
       renderAll();
-      showNotice(`계획 v${saved.version}을 저장했습니다. 이전 버전은 그대로 보관됩니다.`, "success", 3800);
+      showNotice(
+        `계획 v${saved.version}을 저장했습니다.${saved.carryover_note ? " 회고의 고칠 점 한 줄도 함께 넘겼습니다." : ""} 이전 버전은 그대로 보관됩니다.`,
+        "success",
+        4200,
+      );
     } catch (error) {
       showNotice(`계획을 저장하지 못했습니다. ${error.message}`, "error");
       await connectAndLoad({ announce: false });
