@@ -39,6 +39,7 @@ const elements = {
   reflectionForm: $("#reflection-form"),
   taskForm: $("#task-form"),
   taskExecutionForm: $("#task-execution-form"),
+  publicAccessWarning: $("#public-access-warning"),
   exportDataButton: $("#export-data-button"),
 };
 
@@ -827,7 +828,7 @@ function switchView(view) {
   $$(".nav-item").forEach((button) => button.classList.remove("is-active"));
   const matchingNav = $(`.nav-item[data-view="${view}"]`);
   if (matchingNav) matchingNav.classList.add("is-active");
-  elements.exportDataButton.hidden = view !== "plan";
+  elements.publicAccessWarning.hidden = view !== "plan";
   history.replaceState(null, "", `#${view}`);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }

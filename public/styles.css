@@ -87,6 +87,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .connection-badge.is-error .status-dot { background: var(--coral); box-shadow: 0 0 0 5px rgba(239,126,108,.12); }
 
 .public-access-warning { max-width: 1420px; margin: 0 auto 18px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 13px; padding: 15px 16px; border: 1px solid #ead9ad; border-radius: 15px; color: #684d17; background: #fff9e9; }
+.public-access-warning[hidden] { display: none; }
 .public-access-warning-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: #b47a18; font-weight: 900; }
 .public-access-warning strong { font-size: .84rem; }
 .public-access-warning p { margin: 3px 0 0; font-size: .79rem; line-height: 1.5; }
@@ -139,7 +140,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .button.primary:hover { box-shadow: 0 10px 22px rgba(36,154,114,.25); }
 .button.secondary { border-color: #d9dfdc; background: #fff; color: #415068; }
 .button:disabled { opacity: .55; cursor: wait; transform: none; }
-.export-button[hidden] { display: none; }
 .button[data-plan-required]:disabled, .empty-action:disabled { opacity: .55; cursor: not-allowed; transform: none; }
 .muted { color: var(--muted); font-size: .82rem; }
 .week-grid { display: grid; grid-template-columns: repeat(7, 1fr); margin: 6px 0 16px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
