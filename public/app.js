@@ -1,46 +1,13 @@
 const WORKSPACE_ID = "ccna-main";
 const EXPORT_SCHEMA_VERSION = "2.0.0";
 
-const initialPlan = {
-  id: "preview-v1",
-  workspace_id: WORKSPACE_ID,
-  version: 1,
-  title: "CCNA 취득",
-  start_date: "2026-09-21",
-  end_date: "2026-11-01",
-  priority: "high",
-  success_criteria: "CCNA 자격증 취득",
-  expected_days: 40,
-  carryover_note: "",
-  created_at: "2026-09-21T00:00:00+09:00",
-};
-
-const initialTaskSeeds = [
-  { seed_key: "jeremy-it-lab", title: "Jeremy’s IT Lab 유튜브 강의 Day 할당량 시청", due_date: "2026-11-01", priority: "high", tags: ["강의", "유튜브"], estimated_minutes: 60 },
-  { seed_key: "lab-practice", title: "Lab 실습하기", due_date: "2026-11-01", priority: "high", tags: ["실습"], estimated_minutes: 90 },
-  { seed_key: "exam-simulator", title: "CCNA Exam Simulator 문제 풀기", due_date: "2026-11-01", priority: "high", tags: ["문제풀이"], estimated_minutes: 60 },
-  { seed_key: "anki-review", title: "오늘 배운 내용 Anki 카드로 복습하기", due_date: "2026-11-01", priority: "medium", tags: ["복습", "Anki"], estimated_minutes: 30 },
-  { seed_key: "blog-review", title: "블로그에 배운 내용을 복습할 수 있도록 글로 정리하기", due_date: "2026-11-01", priority: "medium", tags: ["복습", "블로그"], estimated_minutes: 45 },
-];
-
-const previewTasks = initialTaskSeeds.map((task, index) => ({
-  ...task,
-  id: `preview-${index + 1}`,
-  workspace_id: WORKSPACE_ID,
-  plan_version: 1,
-  is_completed: false,
-  completed_at: null,
-  created_at: initialPlan.created_at,
-  updated_at: initialPlan.created_at,
-}));
-
 const state = {
   config: readConfig(),
   connected: false,
   loading: false,
-  versions: [initialPlan],
+  versions: [],
   reflections: [],
-  tasks: previewTasks,
+  tasks: [],
   taskExecutions: [],
   completionEvents: [],
   editingTaskId: null,
@@ -132,28 +99,12 @@ async function connectAndLoad({ announce = true } = {}) {
 
   setLoading(true);
   try {
-    let versions = await supabaseRequest(
+    const versions = await supabaseRequest(
       "plan_versions",
       { query: `workspace_id=eq.${WORKSPACE_ID}&order=version.desc` },
     );
 
-    if (!versions.length) {
-      versions = await supabaseRequest("plan_versions", {
-        method: "POST",
-        body: [{
-          workspace_id: WORKSPACE_ID,
-          version: 1,
-          title: initialPlan.title,
-          start_date: initialPlan.start_date,
-          end_date: initialPlan.end_date,
-          priority: initialPlan.priority,
-          success_criteria: initialPlan.success_criteria,
-          expected_days: initialPlan.expected_days,
-        }],
-      });
-    }
-
-    let [reflections, tasks, taskExecutions, completionEvents] = await Promise.all([
+    const [reflections, tasks, taskExecutions, completionEvents] = await Promise.all([
       supabaseRequest("reflections", {
         query: `workspace_id=eq.${WORKSPACE_ID}&order=reflection_date.desc,created_at.desc`,
       }),
@@ -167,18 +118,6 @@ async function connectAndLoad({ announce = true } = {}) {
         query: `workspace_id=eq.${WORKSPACE_ID}&order=completed_at.desc`,
       }),
     ]);
-
-    if (!tasks.length) {
-      const latestPlanVersion = versions[0]?.version || 1;
-      tasks = await supabaseRequest("tasks", {
-        method: "POST",
-        body: initialTaskSeeds.map((task) => ({
-          ...task,
-          workspace_id: WORKSPACE_ID,
-          plan_version: latestPlanVersion,
-        })),
-      });
-    }
 
     state.versions = versions.sort((a, b) => b.version - a.version);
     state.reflections = reflections;
@@ -225,7 +164,7 @@ function showNotice(message, type = "warning", dismissAfter = 0) {
 }
 
 function currentPlan() {
-  return state.versions[0] || initialPlan;
+  return state.versions[0] || null;
 }
 
 function parseLocalDate(value) {
@@ -302,6 +241,35 @@ function getProgress(plan) {
 
 function renderPlan() {
   const plan = currentPlan();
+  const hasPlan = Boolean(plan);
+  $$('[data-plan-required]').forEach((button) => {
+    button.disabled = !hasPlan;
+    button.title = hasPlan ? "" : "첫 계획을 먼저 세워 주세요.";
+  });
+
+  const planButton = $("#edit-plan-button");
+  planButton.textContent = hasPlan ? "✎ 계획 수정" : "＋ 첫 계획 세우기";
+  planButton.className = `button ${hasPlan ? "secondary" : "primary"}`;
+  $("#plan-card-title").textContent = hasPlan ? "현재 계획" : "첫 계획 세우기";
+
+  if (!plan) {
+    $("#goal-title").textContent = "아직 세운 계획이 없어요";
+    $("#task-plan-title").textContent = "계획을 세우면 할 일을 만들 수 있어요";
+    $("#d-day").textContent = "-";
+    $("#date-range").textContent = "-";
+    $("#success-criteria").textContent = "직접 정해 주세요";
+    $("#expected-days").textContent = "-";
+    $("#plan-version-chip").textContent = "시작 전";
+    $("#progress-percent").textContent = "0%";
+    $("#progress-ring").style.setProperty("--progress", 0);
+    $("#priority").textContent = "-";
+    $("#priority").className = "priority";
+    $("#plan-carryover").hidden = true;
+    $("#plan-carryover-note").textContent = "";
+    $("#progress-caption").innerHTML = "첫 계획을 세우면<br />기록을 시작할 수 있어요.";
+    return;
+  }
+
   const { completedDays, percent } = getProgress(plan);
   $("#goal-title").textContent = plan.title;
   $("#task-plan-title").textContent = `${plan.title} 할 일`;
@@ -435,7 +403,9 @@ function renderTasks() {
 
   const list = $("#task-list");
   if (!tasks.length) {
-    list.innerHTML = '<div class="task-empty"><strong>조건에 맞는 할 일이 없어요</strong><p>검색어나 필터 조건을 바꿔 보세요.</p></div>';
+    list.innerHTML = currentPlan()
+      ? '<div class="task-empty"><strong>조건에 맞는 할 일이 없어요</strong><p>새 할 일을 만들거나 검색·필터 조건을 바꿔 보세요.</p></div>'
+      : '<div class="task-empty"><strong>첫 계획을 먼저 세워 주세요</strong><p>계획을 저장하면 그 계획에 연결할 할 일을 만들 수 있습니다.</p></div>';
     return;
   }
 
@@ -679,15 +649,19 @@ function renderCompletionHistory(summary) {
 }
 
 function latestPlanImprovement() {
+  const plan = currentPlan();
+  if (!plan) return null;
   return state.reflections.find((reflection) =>
-    Number(reflection.plan_version) === Number(currentPlan().version) && String(reflection.next_action || "").trim(),
+    Number(reflection.plan_version) === Number(plan.version) && String(reflection.next_action || "").trim(),
   );
 }
 
 function renderCompletionSummary() {
   const summary = getSeeSummary();
   const plan = currentPlan();
-  $("#see-period-label").textContent = `${formatDate(plan.start_date)} – ${formatDate(plan.end_date)}`;
+  $("#see-period-label").textContent = plan
+    ? `${formatDate(plan.start_date)} – ${formatDate(plan.end_date)}`
+    : "첫 계획을 세우면 집계 기간이 표시됩니다.";
   $("#see-plan-count").textContent = summary.tasks.length;
   $("#see-completion-count").textContent = summary.completedTasks.length;
   $("#see-overdue-count").textContent = summary.overdueTasks.length;
@@ -705,6 +679,10 @@ function renderCompletionSummary() {
 function renderTimeline() {
   const timeline = $("#history-timeline");
   timeline.innerHTML = "";
+  if (!state.versions.length) {
+    timeline.innerHTML = '<div class="task-empty"><strong>아직 계획 기록이 없어요</strong><p>첫 계획을 세우면 여기에 보관됩니다.</p></div>';
+    return;
+  }
   state.versions.slice(0, 3).forEach((version, index) => {
     const item = document.createElement("div");
     item.className = `timeline-item${index === 0 ? " current" : ""}`;
@@ -746,6 +724,10 @@ function renderReflections() {
 
 function renderFullHistory() {
   const list = $("#full-history");
+  if (!state.versions.length) {
+    list.innerHTML = emptyState("▤", "아직 계획 기록이 없어요", "첫 계획을 세우면 작성 시점 그대로 여기에 보관됩니다.");
+    return;
+  }
   list.innerHTML = state.versions.map((version, index) => `
     <article class="version-card${index === 0 ? " current" : ""}">
       <span class="version-number">v${version.version}</span>
@@ -852,6 +834,20 @@ function switchView(view) {
 
 function fillPlanForm() {
   const plan = currentPlan();
+  elements.planForm.reset();
+  $("#plan-dialog-title").textContent = plan ? "계획 수정" : "첫 계획 세우기";
+  $("#plan-dialog-copy").textContent = plan
+    ? "저장하면 기존 계획은 유지되고 새 버전이 추가됩니다."
+    : "목표와 성공 기준, 기간을 직접 정해 주세요.";
+  $("#save-plan-button").textContent = plan ? "새 버전으로 저장" : "첫 계획 저장";
+  if (!plan) {
+    const today = toSeoulISODate();
+    elements.planForm.elements.start_date.value = today;
+    elements.planForm.elements.end_date.value = today;
+    elements.planForm.elements.priority.value = "medium";
+    elements.planForm.elements.expected_days.value = 1;
+    return;
+  }
   elements.planForm.elements.title.value = plan.title;
   elements.planForm.elements.start_date.value = plan.start_date;
   elements.planForm.elements.end_date.value = plan.end_date;
@@ -881,6 +877,10 @@ function sortReflections() {
 
 function openReflectionDialog(reflection = null) {
   if (!requireConnection()) return;
+  if (!currentPlan()) {
+    showNotice("회고를 작성하기 전에 첫 계획을 세워 주세요.", "error");
+    return;
+  }
   state.editingReflectionId = reflection?.id ?? null;
   elements.reflectionForm.reset();
   elements.reflectionForm.elements.reflection_date.value = reflection?.reflection_date || toSeoulISODate();
@@ -922,12 +922,17 @@ function parseTags(value) {
 
 function openTaskDialog(task = null) {
   if (!requireConnection()) return;
+  const plan = currentPlan();
+  if (!plan) {
+    showNotice("할 일을 만들기 전에 첫 계획을 세워 주세요.", "error");
+    return;
+  }
   state.editingTaskId = task?.id ?? null;
   elements.taskForm.reset();
   $("#task-dialog-title").textContent = task ? "할 일 수정" : "할 일 만들기";
   $("#save-task-button").textContent = task ? "변경 내용 저장" : "할 일 저장";
   elements.taskForm.elements.title.value = task?.title || "";
-  elements.taskForm.elements.due_date.value = task?.due_date || currentPlan().end_date;
+  elements.taskForm.elements.due_date.value = task?.due_date || plan.end_date;
   elements.taskForm.elements.priority.value = task?.priority || "medium";
   elements.taskForm.elements.estimated_minutes.value = task?.estimated_minutes || 60;
   elements.taskForm.elements.tags.value = (task?.tags || []).join(", ");
@@ -1181,6 +1186,11 @@ function bindEvents() {
   elements.taskForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!requireConnection()) return;
+    const plan = currentPlan();
+    if (!plan) {
+      showNotice("할 일을 저장하기 전에 첫 계획을 세워 주세요.", "error");
+      return;
+    }
     const data = Object.fromEntries(new FormData(elements.taskForm));
     const payload = {
       title: data.title.trim(),
@@ -1203,7 +1213,7 @@ function bindEvents() {
         body: [{
           ...payload,
           workspace_id: WORKSPACE_ID,
-          plan_version: currentPlan().version,
+          plan_version: plan.version,
           is_completed: false,
         }],
       });
@@ -1300,23 +1310,26 @@ function bindEvents() {
 
     setLoading(true);
     try {
+      const previousPlan = currentPlan();
       const plan = {
         workspace_id: WORKSPACE_ID,
-        version: currentPlan().version + 1,
+        version: previousPlan ? previousPlan.version + 1 : 1,
         title: data.title.trim(),
         start_date: data.start_date,
         end_date: data.end_date,
         priority: data.priority,
         success_criteria: data.success_criteria.trim(),
         expected_days: Number(data.expected_days),
-        carryover_note: latestPlanImprovement()?.next_action || "",
+        carryover_note: previousPlan ? latestPlanImprovement()?.next_action || "" : "",
       };
       const [saved] = await supabaseRequest("plan_versions", { method: "POST", body: [plan] });
       state.versions.unshift(saved);
       elements.planDialog.close();
       renderAll();
       showNotice(
-        `계획 v${saved.version}을 저장했습니다.${saved.carryover_note ? " 회고의 고칠 점 한 줄도 함께 넘겼습니다." : ""} 이전 버전은 그대로 보관됩니다.`,
+        previousPlan
+          ? `계획 v${saved.version}을 저장했습니다.${saved.carryover_note ? " 회고의 고칠 점 한 줄도 함께 넘겼습니다." : ""} 이전 버전은 그대로 보관됩니다.`
+          : "첫 계획을 저장했습니다. 이제 계획에 연결할 할 일을 만들어 보세요.",
         "success",
         4200,
       );
@@ -1332,6 +1345,11 @@ function bindEvents() {
     if (event.submitter?.value === "cancel") return;
     event.preventDefault();
     if (!requireConnection()) return;
+    const plan = currentPlan();
+    if (!plan) {
+      showNotice("회고를 저장하기 전에 첫 계획을 세워 주세요.", "error");
+      return;
+    }
     const data = Object.fromEntries(new FormData(elements.reflectionForm));
     const editingReflectionId = state.editingReflectionId;
     const editing = editingReflectionId !== null;
@@ -1353,7 +1371,7 @@ function bindEvents() {
         body: [{
           ...payload,
           workspace_id: WORKSPACE_ID,
-          plan_version: currentPlan().version,
+          plan_version: plan.version,
         }],
       });
       if (!saved) throw new Error(`${editing ? "수정할" : "저장된"} 회고 기록을 찾지 못했습니다.`);

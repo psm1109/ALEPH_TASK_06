@@ -81,9 +81,9 @@
                 <div class="card-heading">
                   <div>
                     <span class="section-kicker">CURRENT PLAN</span>
-                    <h2>현재 계획</h2>
+                    <h2 id="plan-card-title">첫 계획 세우기</h2>
                   </div>
-                  <span id="plan-version-chip" class="version-chip">v1</span>
+                  <span id="plan-version-chip" class="version-chip">시작 전</span>
                 </div>
 
                 <div class="plan-body">
@@ -96,22 +96,22 @@
 
                   <div class="plan-details">
                     <div class="goal-title-row">
-                      <h3 id="goal-title">CCNA 취득</h3>
-                      <span class="deadline-badge" id="d-day">D-41</span>
+                      <h3 id="goal-title">아직 세운 계획이 없어요</h3>
+                      <span class="deadline-badge" id="d-day">-</span>
                     </div>
                     <dl class="detail-grid">
-                      <div><dt><i>▣</i> 기간</dt><dd id="date-range">2026.09.21 – 2026.11.01</dd></div>
-                      <div><dt><i>⚑</i> 우선순위</dt><dd><span id="priority" class="priority high">높음</span></dd></div>
-                      <div><dt><i>◎</i> 성공 기준</dt><dd id="success-criteria">CCNA 자격증 취득</dd></div>
-                      <div><dt><i>◷</i> 예상 시간</dt><dd id="expected-days">40일</dd></div>
+                      <div><dt><i>▣</i> 기간</dt><dd id="date-range">-</dd></div>
+                      <div><dt><i>⚑</i> 우선순위</dt><dd><span id="priority" class="priority">-</span></dd></div>
+                      <div><dt><i>◎</i> 성공 기준</dt><dd id="success-criteria">직접 정해 주세요</dd></div>
+                      <div><dt><i>◷</i> 예상 시간</dt><dd id="expected-days">-</dd></div>
                     </dl>
                     <div id="plan-carryover" class="plan-carryover" hidden>
                       <span>이전 회고에서 가져온 고칠 점</span>
                       <strong id="plan-carryover-note"></strong>
                     </div>
                     <div class="plan-actions">
-                      <button id="edit-plan-button" class="button secondary" type="button">✎ 계획 수정</button>
-                      <button class="button primary" data-open-task-execution type="button">▷ 실행 기록 남기기</button>
+                      <button id="edit-plan-button" class="button primary" type="button">＋ 첫 계획 세우기</button>
+                      <button class="button primary" data-open-task-execution data-plan-required type="button" disabled>▷ 실행 기록 남기기</button>
                     </div>
                   </div>
                 </div>
@@ -123,7 +123,7 @@
                   <span id="week-range" class="muted"></span>
                 </div>
                 <div id="week-grid" class="week-grid"></div>
-                <button id="week-empty" class="empty-action" data-open-task-execution type="button">
+                <button id="week-empty" class="empty-action" data-open-task-execution data-plan-required type="button" disabled>
                   <span aria-hidden="true">▧</span>
                   <span><strong>아직 실행 기록이 없어요</strong><small>첫 학습을 기록해 보세요</small></span>
                 </button>
@@ -133,10 +133,10 @@
                 <div class="task-card-head">
                   <div>
                     <span class="section-kicker">PLAN TASKS</span>
-                    <h2 id="task-plan-title">CCNA 취득 할 일</h2>
-                    <p><strong id="task-progress-count">0 / 5 완료</strong><span id="task-result-count">할 일 5개</span></p>
+                    <h2 id="task-plan-title">계획을 세우면 할 일을 만들 수 있어요</h2>
+                    <p><strong id="task-progress-count">0 / 0 완료</strong><span id="task-result-count">검색 결과 0개</span></p>
                   </div>
-                  <button id="add-task-button" class="button primary" type="button">＋ 할 일 만들기</button>
+                  <button id="add-task-button" class="button primary" data-plan-required type="button" disabled>＋ 할 일 만들기</button>
                 </div>
 
                 <div class="task-toolbar">
@@ -205,7 +205,7 @@
         <section id="do-view" class="view" aria-label="실행 기록">
           <div class="workspace-head">
             <div><span class="section-kicker">DO</span><h2>실행 기록</h2><p>실행한 할 일을 선택하면 기록이 해당 할 일에 바로 연결됩니다.</p></div>
-            <button class="button primary" data-open-task-execution type="button">＋ 실행 기록</button>
+            <button class="button primary" data-open-task-execution data-plan-required type="button" disabled>＋ 실행 기록</button>
           </div>
           <article class="card linked-log-section">
             <div class="execution-list-meta">
@@ -219,7 +219,7 @@
         <section id="see-view" class="view" aria-label="돌아보기">
           <div class="workspace-head">
             <div><span class="section-kicker">SEE</span><h2>과정 돌아보기</h2><p>잘한 점과 다음 행동을 정리하면 계획이 더 단단해집니다.</p></div>
-            <button id="add-reflection-button" class="button primary" data-open-reflection type="button">＋ 회고 작성</button>
+            <button id="add-reflection-button" class="button primary" data-open-reflection data-plan-required type="button" disabled>＋ 회고 작성</button>
           </div>
           <div class="see-period">
             <span>집계 기간</span>
@@ -248,7 +248,7 @@
           <article class="card next-plan-card">
             <div><span class="section-kicker">NEXT PLAN</span><h2>다음 계획으로 넘길 한 줄</h2></div>
             <p id="next-plan-note">아직 정한 고칠 점이 없습니다.</p>
-            <button class="button secondary" data-open-reflection type="button">회고에서 정하기</button>
+            <button class="button secondary" data-open-reflection data-plan-required type="button" disabled>회고에서 정하기</button>
           </article>
           <div id="reflection-list" class="record-list"></div>
         </section>
@@ -264,8 +264,8 @@
 
     <dialog id="plan-dialog" class="modal">
       <form id="plan-form" method="dialog">
-        <div class="modal-head"><div><span class="section-kicker">NEW VERSION</span><h2>계획 수정</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="닫기">×</button></div>
-        <p class="modal-copy">저장하면 기존 계획은 유지되고 새 버전이 추가됩니다.</p>
+        <div class="modal-head"><div><span class="section-kicker">PLAN</span><h2 id="plan-dialog-title">첫 계획 세우기</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="닫기">×</button></div>
+        <p id="plan-dialog-copy" class="modal-copy">목표와 성공 기준, 기간을 직접 정해 주세요.</p>
         <div class="form-grid">
           <label class="full">계획 이름<input name="title" required maxlength="80" /></label>
           <label>시작일<input name="start_date" type="date" required /></label>
@@ -297,7 +297,7 @@
           <div><span class="section-kicker">PLAN TASK</span><h2 id="task-dialog-title">할 일 만들기</h2></div>
           <button class="icon-button" type="button" data-close-dialog aria-label="닫기">×</button>
         </div>
-        <p class="modal-copy">CCNA 취득 계획에 연결할 실행 항목을 입력하세요.</p>
+        <p class="modal-copy">현재 계획에 연결할 실행 항목을 입력하세요.</p>
         <div class="form-grid">
           <label class="full">할 일 내용<input name="title" required maxlength="160" /></label>
           <label>마감일<input name="due_date" type="date" required /></label>
