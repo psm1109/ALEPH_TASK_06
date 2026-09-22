@@ -827,6 +827,7 @@ function switchView(view) {
   $$(".nav-item").forEach((button) => button.classList.remove("is-active"));
   const matchingNav = $(`.nav-item[data-view="${view}"]`);
   if (matchingNav) matchingNav.classList.add("is-active");
+  elements.exportDataButton.hidden = view !== "plan";
   history.replaceState(null, "", `#${view}`);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -1099,7 +1100,6 @@ function bindEvents() {
     if (!metric) return;
     state.seeEvidenceType = metric.dataset.seeEvidence;
     renderCompletionSummary();
-    $("#see-evidence-card").scrollIntoView({ behavior: "smooth", block: "start" });
     $("#see-evidence-card").focus({ preventScroll: true });
   });
 

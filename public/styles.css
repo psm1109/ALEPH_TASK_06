@@ -139,6 +139,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .button.primary:hover { box-shadow: 0 10px 22px rgba(36,154,114,.25); }
 .button.secondary { border-color: #d9dfdc; background: #fff; color: #415068; }
 .button:disabled { opacity: .55; cursor: wait; transform: none; }
+.export-button[hidden] { display: none; }
 .button[data-plan-required]:disabled, .empty-action:disabled { opacity: .55; cursor: not-allowed; transform: none; }
 .muted { color: var(--muted); font-size: .82rem; }
 .week-grid { display: grid; grid-template-columns: repeat(7, 1fr); margin: 6px 0 16px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
