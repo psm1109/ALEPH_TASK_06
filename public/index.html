@@ -280,14 +280,14 @@
 
     <dialog id="reflection-dialog" class="modal">
       <form id="reflection-form" method="dialog">
-        <div class="modal-head"><div><span class="section-kicker">SEE</span><h2>과정 돌아보기</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="닫기">×</button></div>
+        <div class="modal-head"><div><span class="section-kicker">SEE</span><h2 id="reflection-dialog-title">과정 돌아보기</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="닫기">×</button></div>
         <div class="form-grid">
           <label>회고일<input name="reflection_date" type="date" required /></label>
           <label>오늘의 만족도<select name="mood"><option value="great">아주 좋아요</option><option value="good">좋아요</option><option value="okay">보통이에요</option><option value="hard">아쉬워요</option></select></label>
           <label class="full">잘한 점<textarea name="went_well" rows="3" required maxlength="500"></textarea></label>
           <label class="full">다음 계획으로 넘길 고칠 점<input name="next_action" required maxlength="160" placeholder="예: 매일 시작 전에 서브넷 계산 10문제를 먼저 푼다" /></label>
         </div>
-        <div class="modal-actions"><button class="button secondary" type="button" data-close-dialog>취소</button><button class="button primary" value="default">회고 저장</button></div>
+        <div class="modal-actions"><button class="button secondary" type="button" data-close-dialog>취소</button><button id="save-reflection-button" class="button primary" value="default">회고 저장</button></div>
       </form>
     </dialog>
 

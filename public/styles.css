@@ -273,7 +273,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .record-icon { width: 46px; height: 46px; display: grid; place-items: center; border-radius: 14px; color: var(--green-dark); background: var(--mint); font-size: 1.2rem; }
 .record-copy h3 { margin: 0 0 5px; font-size: .98rem; }
 .record-copy p { margin: 0; color: var(--ink-soft); line-height: 1.55; white-space: pre-wrap; }
-.record-meta { color: var(--muted); font-size: .77rem; text-align: right; }
+.record-meta { display: grid; justify-items: end; gap: 9px; color: var(--muted); font-size: .77rem; text-align: right; }
+.reflection-actions { display: flex; gap: 5px; }
 .empty-state { display: grid; justify-items: center; gap: 12px; padding: 54px 20px; border: 1px dashed #cfe0da; border-radius: 18px; background: rgba(255,255,255,.58); text-align: center; }
 .empty-state span { font-size: 2rem; }
 .empty-state h3 { margin: 0; }
@@ -372,7 +373,7 @@ input:focus, textarea:focus, select:focus { border-color: #73bda2; }
   .completion-task-times { justify-content: flex-start; }
   .next-plan-card p, .next-plan-card .button { grid-column: 1; grid-row: auto; }
   .next-plan-card .button { width: 100%; }
-  .record-meta, .version-card > time { grid-column: 2; text-align: left; }
+  .record-meta, .version-card > time { grid-column: 2; justify-items: start; text-align: left; }
   .form-grid { grid-template-columns: 1fr; }
   .form-grid .full { grid-column: auto; }
   .modal form { padding: 21px; }

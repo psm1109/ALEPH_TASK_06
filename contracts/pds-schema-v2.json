@@ -85,8 +85,13 @@
       }
     },
     "reflections": {
-      "description": "계획 버전에 연결되는 돌아보기 기록",
+      "description": "계획 버전에 연결되며 작성 후 수정하거나 삭제할 수 있는 돌아보기 기록",
       "primary_key": "id",
+      "mutability": {
+        "insert": true,
+        "update": ["reflection_date", "mood", "went_well", "next_action", "updated_at"],
+        "delete": "hard-delete"
+      },
       "fields": {
         "id": { "type": "integer", "generated": true },
         "workspace_id": { "type": "string", "required": true },
@@ -95,7 +100,8 @@
         "mood": { "type": "enum", "values": ["great", "good", "okay", "hard"], "required": true },
         "went_well": { "type": "string", "required": true },
         "next_action": { "type": "string", "required": true },
-        "created_at": { "type": "timestamp", "required": true, "generated": true }
+        "created_at": { "type": "timestamp", "required": true, "generated": true },
+        "updated_at": { "type": "timestamp", "required": true, "default": "now()", "updated_by": "application" }
       }
     }
   },

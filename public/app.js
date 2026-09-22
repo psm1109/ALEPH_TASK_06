@@ -45,6 +45,7 @@ const state = {
   completionEvents: [],
   editingTaskId: null,
   editingExecutionId: null,
+  editingReflectionId: null,
   seeEvidenceType: "planned",
   pendingTaskIds: new Set(),
   taskQuery: {
@@ -732,7 +733,13 @@ function renderReflections() {
         <h3>${formatDate(item.reflection_date)} · ${moodMap[item.mood] || item.mood}</h3>
         <p><strong>잘한 점</strong> · ${escapeHTML(item.went_well)}<br /><strong>다음 계획으로 넘길 고칠 점</strong> · ${escapeHTML(item.next_action)}</p>
       </div>
-      <div class="record-meta">계획 v${item.plan_version}<br />${formatTimestamp(item.created_at)}</div>
+      <div class="record-meta">
+        <span>계획 v${item.plan_version}<br />${formatTimestamp(item.updated_at || item.created_at)}${item.updated_at && item.updated_at !== item.created_at ? " · 수정됨" : ""}</span>
+        <div class="reflection-actions">
+          <button class="execution-action" type="button" data-action="edit-reflection" data-reflection-id="${escapeHTML(item.id)}">수정</button>
+          <button class="execution-action delete" type="button" data-action="delete-reflection" data-reflection-id="${escapeHTML(item.id)}">삭제</button>
+        </div>
+      </div>
     </article>
   `).join("");
 }
@@ -859,6 +866,50 @@ function findTask(taskId) {
 
 function findExecutionLog(executionId) {
   return state.taskExecutions.find((log) => String(log.id) === String(executionId));
+}
+
+function findReflection(reflectionId) {
+  return state.reflections.find((reflection) => String(reflection.id) === String(reflectionId));
+}
+
+function sortReflections() {
+  state.reflections.sort((a, b) =>
+    String(b.reflection_date).localeCompare(String(a.reflection_date))
+    || new Date(b.created_at) - new Date(a.created_at),
+  );
+}
+
+function openReflectionDialog(reflection = null) {
+  if (!requireConnection()) return;
+  state.editingReflectionId = reflection?.id ?? null;
+  elements.reflectionForm.reset();
+  elements.reflectionForm.elements.reflection_date.value = reflection?.reflection_date || toSeoulISODate();
+  elements.reflectionForm.elements.mood.value = reflection?.mood || "great";
+  elements.reflectionForm.elements.went_well.value = reflection?.went_well || "";
+  elements.reflectionForm.elements.next_action.value = reflection?.next_action || "";
+  $("#reflection-dialog-title").textContent = reflection ? "회고 기록 수정" : "과정 돌아보기";
+  $("#save-reflection-button").textContent = reflection ? "변경 내용 저장" : "회고 저장";
+  elements.reflectionDialog.showModal();
+}
+
+async function deleteReflection(reflection) {
+  if (!reflection || !requireConnection()) return;
+  if (!window.confirm(`${formatDate(reflection.reflection_date)} 회고 기록을 삭제할까요?\n삭제한 기록은 되돌릴 수 없습니다.`)) return;
+
+  setLoading(true);
+  try {
+    await supabaseRequest("reflections", {
+      method: "DELETE",
+      query: `id=eq.${encodeURIComponent(reflection.id)}&workspace_id=eq.${WORKSPACE_ID}`,
+    });
+    state.reflections = state.reflections.filter((item) => String(item.id) !== String(reflection.id));
+    renderAll();
+    showNotice("회고 기록을 삭제했습니다.", "success", 2800);
+  } catch (error) {
+    showNotice(`회고 기록을 삭제하지 못했습니다. ${error.message}`, "error");
+  } finally {
+    setLoading(false);
+  }
 }
 
 function parseTags(value) {
@@ -1036,12 +1087,7 @@ function bindEvents() {
     fillPlanForm();
     elements.planDialog.showModal();
   });
-  $$('[data-open-reflection]').forEach((button) => button.addEventListener("click", () => {
-    if (!requireConnection()) return;
-    elements.reflectionForm.reset();
-    elements.reflectionForm.elements.reflection_date.value = toSeoulISODate();
-    elements.reflectionDialog.showModal();
-  }));
+  $$('[data-open-reflection]').forEach((button) => button.addEventListener("click", () => openReflectionDialog()));
   $("#add-task-button").addEventListener("click", () => openTaskDialog());
 
   $("#see-metrics").addEventListener("click", (event) => {
@@ -1122,6 +1168,14 @@ function bindEvents() {
   $("#all-task-execution-list").addEventListener("click", (event) => {
     const button = event.target.closest("[data-action]");
     if (button) handleExecutionAction(button);
+  });
+
+  $("#reflection-list").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-action]");
+    if (!button) return;
+    const reflection = findReflection(button.dataset.reflectionId);
+    if (button.dataset.action === "edit-reflection" && reflection) openReflectionDialog(reflection);
+    if (button.dataset.action === "delete-reflection" && reflection) void deleteReflection(reflection);
   });
 
   elements.taskForm.addEventListener("submit", async (event) => {
@@ -1279,25 +1333,44 @@ function bindEvents() {
     event.preventDefault();
     if (!requireConnection()) return;
     const data = Object.fromEntries(new FormData(elements.reflectionForm));
+    const editingReflectionId = state.editingReflectionId;
+    const editing = editingReflectionId !== null;
+    const payload = {
+      reflection_date: data.reflection_date,
+      mood: data.mood,
+      went_well: data.went_well.trim(),
+      next_action: data.next_action.trim(),
+      ...(editing ? { updated_at: new Date().toISOString() } : {}),
+    };
     setLoading(true);
     try {
-      const [saved] = await supabaseRequest("reflections", {
+      const [saved] = await supabaseRequest("reflections", editing ? {
+        method: "PATCH",
+        query: `id=eq.${encodeURIComponent(editingReflectionId)}&workspace_id=eq.${WORKSPACE_ID}`,
+        body: payload,
+      } : {
         method: "POST",
         body: [{
+          ...payload,
           workspace_id: WORKSPACE_ID,
           plan_version: currentPlan().version,
-          reflection_date: data.reflection_date,
-          mood: data.mood,
-          went_well: data.went_well.trim(),
-          next_action: data.next_action.trim(),
         }],
       });
-      state.reflections.unshift(saved);
+      if (!saved) throw new Error(`${editing ? "수정할" : "저장된"} 회고 기록을 찾지 못했습니다.`);
+      if (editing) {
+        state.reflections = state.reflections.map((reflection) =>
+          String(reflection.id) === String(editingReflectionId) ? saved : reflection,
+        );
+      } else {
+        state.reflections.unshift(saved);
+      }
+      sortReflections();
+      state.editingReflectionId = null;
       elements.reflectionDialog.close();
       renderAll();
-      showNotice("회고를 저장했습니다.", "success", 2800);
+      showNotice(`회고 기록을 ${editing ? "수정" : "저장"}했습니다.`, "success", 2800);
     } catch (error) {
-      showNotice(`회고를 저장하지 못했습니다. ${error.message}`, "error");
+      showNotice(`회고 기록을 ${editing ? "수정" : "저장"}하지 못했습니다. ${error.message}`, "error");
     } finally {
       setLoading(false);
     }
