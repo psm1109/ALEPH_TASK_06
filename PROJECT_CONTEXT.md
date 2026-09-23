@@ -6,8 +6,8 @@
 
 - 저장소: `psm1109/ALEPH_TASK_06`
 - 작업 브랜치: `codex/card-1-auth`
-- 현재 기준 커밋: `7abcbb0`
-- 작업 트리에는 로그인·가입 자격 증명의 네트워크 원문 노출 방지 변경이 아직 커밋되지 않은 상태로 있습니다.
+- 현재 기준 커밋: `497fcc9`
+- 작업 트리에는 카드 3의 access token 식별·즉시 세션 폐기·검증 기록 변경이 아직 커밋되지 않은 상태로 있습니다.
 - 원격 추적 브랜치: `origin/codex/card-1-auth`
 - 고정된 최종 T06 조상 커밋: `bab809b`
 - 현재 브랜치에는 병합 커밋 `59530ab`과 카드 1의 과거 커밋 두 개가 함께 있습니다. 앞으로는 현재 브랜치의 최신 파일과 HEAD를 기준으로 작업합니다.
@@ -80,6 +80,25 @@
 - `contracts/pds-schema-v2.json`
 - `README.md`
 
+### 카드 3 — access token 식별과 즉시 세션 폐기
+
+- 브라우저는 Supabase access token JWT를 `Authorization` 헤더로 보내고, 서버는 JWT의 `sub`를 `auth.uid()`로 사용합니다.
+- 서명상 유효한 JWT라도 `session_id`가 서버 `auth.sessions`에 남아 있지 않으면 Data API 요청을 거절하도록 `private.is_auth_session_active()`와 `private.check_auth_session()`을 추가했습니다.
+- PostgREST의 `pgrst.db_pre_request`에서 비활성 세션을 HTTP 오류로 끝내고, 각 RLS 정책에도 활성 세션 조건을 중복 적용했습니다.
+- 이 사전 요청 검사는 프로젝트의 모든 인증된 Data API 요청에 적용되므로, `auth.sessions` 행이 없는 외부 발급 JWT도 거절됩니다. 현재 앱은 Supabase Auth만 사용하지만 다른 인증 공급자를 추가할 때는 호환성을 다시 검토해야 합니다.
+- 같은 URL·GET·같은 access token을 로그아웃 전후에 재사용하고 token 원문 대신 SHA-256 지문, `iat`, `exp`, 응답 상태만 출력하는 검증 스크립트를 추가했습니다.
+- 현재 소스와 Git 전체 patch 기록에서 실제 `sb_secret_...`, private-key PEM, secret 환경 변수 값, service-role JWT를 찾는 검사를 추가했습니다.
+- 제출문에는 식별 방식, URL 비포함, 만료 기록, 로그아웃 전후 비교 표를 추가했지만 실제 운영 응답은 아직 비워 두었습니다.
+
+관련 파일:
+
+- `supabase/schema.sql`
+- `scripts/verify-session-revocation.mjs`
+- `docs/card-3-session-revocation.md`
+- `tests/card3-session.test.cjs`
+- `tests/git-secret-history.test.ps1`
+- `README.md`
+
 ## 완료한 확인
 
 저장소 루트에서 다음 명령을 실행합니다.
@@ -88,7 +107,11 @@
 node tests\card1-static.test.cjs
 node tests\card2-password.test.cjs
 node tests\auth-crypto.test.mjs
+node tests\card3-session.test.cjs
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\git-secret-history.test.ps1
 node --check public\app.js
+node --check scripts\generate-auth-key.mjs
+node --check scripts\verify-session-revocation.mjs
 git diff --check
 ```
 
@@ -97,8 +120,11 @@ git diff --check
 - 카드 1 정적 검사: 20개 통과
 - 카드 2 비밀번호 검사: 23개 통과
 - 인증 Payload 암호화 실행 검사: 5개 통과
+- 카드 3 세션 정적·비밀값 검사: 18개 통과
+- Git 전체 patch 기록 비밀값 검사: 통과
 - `public/app.js` 문법 검사: 통과
 - `scripts/generate-auth-key.mjs` 문법 검사: 통과
+- `scripts/verify-session-revocation.mjs` 문법 검사: 통과
 - RSA-OAEP-256 + AES-256-GCM 암호화·복호화 로컬 왕복 검사: 통과
 - `git diff --check`: 통과(LF→CRLF 안내만 표시)
 
@@ -118,6 +144,8 @@ git diff --check
 8. 운영 웹 origin을 `AUTH_ALLOWED_ORIGIN`으로 설정한 뒤 `auth-gateway` Edge Function을 배포합니다. 현재 PC에는 Supabase CLI가 설치되어 있지 않아 미실행입니다.
 9. 배포된 앱에서 로그인 요청 Payload가 `mode`, `encrypted_key`, `iv`, `ciphertext`만 포함하는지 확인합니다. Response·Console·화면·Edge Function 로그에서 시험 비밀번호 원문을 검색해 모두 0건인지 확인합니다.
 10. RLS 적용 후 로그인하지 않은 REST 요청을 다시 보내 실제 응답을 기록합니다. 마지막 적용 전 확인에서는 빈 배열과 HTTP 200이 돌아왔으므로, 그 결과는 보호 근거가 아니라 실패 상태의 기준점입니다.
+11. `supabase/schema.sql` 적용 뒤 시험 계정 정보를 화면이나 명령 기록에 남기지 않는 방식으로 `node scripts/verify-session-revocation.mjs`를 실행합니다. 로그인 상태의 200과 서버 로그아웃 뒤 같은 access token의 401/403, 실제 `iat`·`exp`·수명을 `docs/card-3-session-revocation.md`에 옮깁니다.
+12. 운영 배포 산출물에서도 URL에 token이 없고 `sb_secret_...`, service-role key, JWT 서명키, RSA private key가 없음을 별도로 확인합니다. 현재 검사는 로컬 소스와 Git 기록까지만 완료했습니다.
 
 ## 기존 자료 관련 주의사항
 
@@ -132,4 +160,4 @@ git diff --check
 
 ## 다음 작업
 
-먼저 인증 비밀키를 운영 Supabase secret으로 설정하고 `auth-gateway`를 배포합니다. 이어서 실제 로그인으로 네트워크 요청·응답, 화면, 콘솔, Edge Function 로그의 비밀번호 원문 0건을 확인합니다. 그 뒤 카드 1·2의 나머지 실제 검증을 마치고 카드 3 세션 폐기 작업을 시작합니다.
+먼저 인증 비밀키를 운영 Supabase secret으로 설정하고 `auth-gateway`를 배포한 뒤 `supabase/schema.sql`을 SQL Editor에서 실행합니다. 이어서 실제 로그인으로 카드 1·2의 네트워크·RLS 증거를 확인하고, `scripts/verify-session-revocation.mjs`로 카드 3의 같은 access token 200→401/403 비교와 실제 만료 시간을 기록합니다. 마지막으로 운영 배포 파일의 비밀값 부재를 별도로 확인합니다.

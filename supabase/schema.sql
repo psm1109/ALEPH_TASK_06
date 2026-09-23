@@ -142,6 +142,55 @@ alter table public.tasks enable row level security;
 alter table public.task_execution_logs enable row level security;
 alter table public.task_completion_events enable row level security;
 
+-- A valid JWT alone is not enough for diary access. Supabase access tokens can
+-- remain cryptographically valid until exp after logout, so every request also
+-- has to prove that its session_id still exists in Auth's server-side session
+-- table. Keep this helper outside the exposed public schema.
+create schema if not exists private;
+revoke all on schema private from public;
+grant usage on schema private to authenticated;
+
+create or replace function private.is_auth_session_active()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from auth.sessions
+    where auth.sessions.id::text = nullif(auth.jwt() ->> 'session_id', '')
+      and auth.sessions.user_id = auth.uid()
+  );
+$$;
+
+revoke all on function private.is_auth_session_active() from public;
+grant execute on function private.is_auth_session_active() to authenticated;
+
+create or replace function private.check_auth_session()
+returns void
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.role() = 'authenticated' and not private.is_auth_session_active() then
+    raise insufficient_privilege using
+      message = 'The authentication session is no longer active.';
+  end if;
+end;
+$$;
+
+revoke all on function private.check_auth_session() from public;
+grant execute on function private.check_auth_session() to authenticated;
+
+-- PostgREST runs this before each Data API request. A revoked session therefore
+-- receives an HTTP error instead of an RLS-filtered 200 with an empty array.
+alter role authenticator set pgrst.db_pre_request = 'private.check_auth_session';
+notify pgrst, 'reload config';
+
 -- Remove every policy used by the public T06 workspace and prior runs of this file.
 drop policy if exists "public plan versions read" on public.plan_versions;
 drop policy if exists "public plan versions insert" on public.plan_versions;
@@ -167,26 +216,55 @@ drop policy if exists "owner task completion events read" on public.task_complet
 
 create policy "owner plan versions read"
   on public.plan_versions for select to authenticated
-  using (auth.uid() is not null and user_id = auth.uid());
+  using (
+    (select private.is_auth_session_active())
+    and auth.uid() is not null
+    and user_id = auth.uid()
+  );
 create policy "owner plan versions insert"
   on public.plan_versions for insert to authenticated
-  with check (auth.uid() is not null and user_id = auth.uid());
+  with check (
+    (select private.is_auth_session_active())
+    and auth.uid() is not null
+    and user_id = auth.uid()
+  );
 
 create policy "owner reflections all"
   on public.reflections for all to authenticated
-  using (auth.uid() is not null and user_id = auth.uid())
-  with check (auth.uid() is not null and user_id = auth.uid());
+  using (
+    (select private.is_auth_session_active())
+    and auth.uid() is not null
+    and user_id = auth.uid()
+  )
+  with check (
+    (select private.is_auth_session_active())
+    and auth.uid() is not null
+    and user_id = auth.uid()
+  );
 
 create policy "owner tasks all"
   on public.tasks for all to authenticated
-  using (auth.uid() is not null and user_id = auth.uid())
-  with check (auth.uid() is not null and user_id = auth.uid());
+  using (
+    (select private.is_auth_session_active())
+    and auth.uid() is not null
+    and user_id = auth.uid()
+  )
+  with check (
+    (select private.is_auth_session_active())
+    and auth.uid() is not null
+    and user_id = auth.uid()
+  );
 
 create policy "owner task execution logs all"
   on public.task_execution_logs for all to authenticated
-  using (auth.uid() is not null and user_id = auth.uid())
+  using (
+    (select private.is_auth_session_active())
+    and auth.uid() is not null
+    and user_id = auth.uid()
+  )
   with check (
-    auth.uid() is not null
+    (select private.is_auth_session_active())
+    and auth.uid() is not null
     and user_id = auth.uid()
     and exists (
       select 1
@@ -198,7 +276,11 @@ create policy "owner task execution logs all"
 
 create policy "owner task completion events read"
   on public.task_completion_events for select to authenticated
-  using (auth.uid() is not null and user_id = auth.uid());
+  using (
+    (select private.is_auth_session_active())
+    and auth.uid() is not null
+    and user_id = auth.uid()
+  );
 
 -- The browser can no longer use the public anonymous role for diary data.
 revoke all on table public.plan_versions from anon, authenticated;

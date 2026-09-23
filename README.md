@@ -13,6 +13,7 @@
 - 로그인하지 않은 상태에서는 URL의 `#plan`, `#do`, `#see`, `#history`를 직접 열어도 다이어리 대신 로그인 화면이 나옵니다.
 - 모든 자료 요청은 세션 access token을 `Authorization` 헤더로 보내며 URL에는 싣지 않습니다.
 - 각 자료 행의 `user_id`가 서버의 `auth.uid()`와 같은지는 PostgreSQL RLS가 검사합니다.
+- 로그아웃된 JWT가 만료 전까지 재사용되는 것을 막기 위해 JWT의 `session_id`가 서버의 `auth.sessions`에 남아 있는지도 Data API 요청마다 검사합니다.
 - 로그인 실패 화면은 존재하지 않는 이메일과 틀린 비밀번호를 구별하지 않고 모두 `이메일 또는 비밀번호를 확인해 주세요.`라고 표시합니다.
 
 ### 비밀번호 보관
@@ -62,7 +63,7 @@
 
 ## Supabase 설정
 
-1. Supabase 프로젝트의 SQL Editor에서 [`supabase/schema.sql`](supabase/schema.sql)을 실행합니다.
+1. Supabase 프로젝트의 SQL Editor에서 [`supabase/schema.sql`](supabase/schema.sql)을 실행합니다. 이 SQL은 RLS뿐 아니라 로그아웃된 세션을 Data API에서 즉시 거절하는 사전 요청 검사도 설정합니다.
 2. Supabase Authentication의 Email provider를 활성화합니다. 과제 확인 중 가입 직후 로그인해야 한다면 Confirm email을 끕니다.
 3. [`public/config.js`](public/config.js)에 Project URL과 `sb_publishable_...` 형식의 Publishable key를 설정합니다.
 4. 가입 화면에서 기존 자료를 소유할 본인 계정을 만듭니다.
@@ -118,7 +119,8 @@ python -m http.server 4173 --directory public
 │  ├─ app.js           # 인증 상태, Plan·Do·See 상태와 Supabase REST 처리
 │  └─ config.js        # Project URL과 Publishable key
 ├─ scripts/
-│  └─ generate-auth-key.mjs # Git 제외 대상 RSA 비밀키 파일 생성
+│  ├─ generate-auth-key.mjs # Git 제외 대상 RSA 비밀키 파일 생성
+│  └─ verify-session-revocation.mjs # 같은 JWT의 로그아웃 전후 응답 비교
 ├─ supabase/
 │  ├─ config.toml      # auth-gateway의 공개 호출 설정
 │  ├─ functions/auth-gateway/index.ts # 암호화된 인증 요청 중계
@@ -146,6 +148,9 @@ python -m http.server 4173 --directory public
 node tests/card1-static.test.cjs
 node tests/card2-password.test.cjs
 node tests/auth-crypto.test.mjs
+node tests/card3-session.test.cjs
 ```
 
 배포 후 개발자 도구에서 로그인 요청을 확인할 때 `auth-gateway` POST의 Payload에는 `mode`, `encrypted_key`, `iv`, `ciphertext`만 있어야 합니다. `password` 필드나 입력한 비밀번호 원문이 보이면 통과로 판정하지 않습니다. Response·Console·화면과 Supabase Edge Function 로그에도 원문이 없어야 합니다.
+
+로그인한 사람을 식별하는 값, 만료 시각, 같은 요청의 로그아웃 전후 비교 절차는 [`docs/card-3-session-revocation.md`](docs/card-3-session-revocation.md)에 기록합니다. 실제 응답은 운영 SQL과 Edge Function을 배포한 뒤 시험 계정으로 확인하기 전에는 통과로 판정하지 않습니다.
