@@ -6,8 +6,8 @@
 
 - 저장소: `psm1109/ALEPH_TASK_06`
 - 작업 브랜치: `codex/card-1-auth`
-- 현재 기준 커밋: `178128d`
-- 작업 트리에는 카드 3의 실제 운영 증거, 브라우저 검사 스크립트, 운영 DB용 증분 SQL 기록이 아직 커밋되지 않은 상태로 있습니다.
+- 현재 기준 커밋: `1df28c5`
+- 작업 트리에는 카드 3 비밀키 검사 범위와 결과를 명확히 적는 문서 변경이 아직 커밋되지 않은 상태로 있습니다.
 - 원격 추적 브랜치: `origin/codex/card-1-auth`
 - 고정된 최종 T06 조상 커밋: `bab809b`
 - 현재 브랜치에는 병합 커밋 `59530ab`과 카드 1의 과거 커밋 두 개가 함께 있습니다. 앞으로는 현재 브랜치의 최신 파일과 HEAD를 기준으로 작업합니다.
@@ -88,7 +88,7 @@
 - 이 사전 요청 검사는 프로젝트의 모든 인증된 Data API 요청에 적용되므로, `auth.sessions` 행이 없는 외부 발급 JWT도 거절됩니다. 현재 앱은 Supabase Auth만 사용하지만 다른 인증 공급자를 추가할 때는 호환성을 다시 검토해야 합니다.
 - 같은 URL·GET·같은 access token을 로그아웃 전후에 재사용하고 token 원문 대신 SHA-256 지문, `iat`, `exp`, 응답 상태만 출력하는 검증 스크립트를 추가했습니다.
 - 현재 소스와 Git 전체 patch 기록에서 실제 `sb_secret_...`, private-key PEM, secret 환경 변수 값, service-role JWT를 찾는 검사를 추가했습니다.
-- 제출문에는 식별 방식, URL 비포함, 만료 기록, 로그아웃 전후 비교 표를 추가했지만 실제 운영 응답은 아직 비워 두었습니다.
+- 제출문에 식별 방식, URL 비포함, 실제 만료 기록, 로그아웃 전후 `200 → 403` 비교, 비밀키 검사 결과를 기록했습니다.
 
 관련 파일:
 
@@ -154,6 +154,8 @@ git diff --check
 - 배포 페이지가 요청한 REST URL 5개를 확인했고 token·refresh token·`session_id`가 URL 쿼리에 포함된 요청은 없었습니다.
 - 실제 Vercel 배포 파일 `/`, `/config.js`, `/app.js`, `/auth-crypto.mjs`, `/styles.css`를 검사했고 private secret 패턴 발견 건수는 `0`이었습니다.
 - 전체 Git patch 기록의 private secret 패턴 검사도 통과했습니다.
+- 브라우저 배포 대상인 `public` 파일 5개를 별도로 다시 검사했고 private secret 패턴 발견 건수는 `0`이었습니다.
+- 검사 범위와 금지 패턴, 공개 `sb_publishable_...` 예외를 `docs/card-3-session-revocation.md`의 표에 기록했습니다.
 
 ## 아직 필요한 실제 확인
 

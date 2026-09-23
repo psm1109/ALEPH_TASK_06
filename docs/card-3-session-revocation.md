@@ -54,4 +54,24 @@ Supabase는 일반적으로 짧은 access token 수명을 권장한다. 이 기�
 - 인증 Payload 복호화용 RSA private key는 Git 제외 파일에서 Supabase secret으로만 설정한다.
 - `node tests/card3-session.test.cjs`는 현재 소스에서, `tests/git-secret-history.test.ps1`은 전체 Git patch 기록에서 private-key PEM, 실제 `sb_secret_...`, service-role JWT, secret 환경 변수 값 형태를 검사한다.
 
-2026-09-23 실제 Vercel 배포의 `/`, `/config.js`, `/app.js`, `/auth-crypto.mjs`, `/styles.css` 다섯 파일을 메모리에서 읽어 같은 비밀값 패턴을 검사했고 발견 건수는 `0`이었다. 배포 페이지가 실제로 요청한 REST URL 5개도 자산 목록에서 확인했으며 어느 URL에도 access token, refresh token, `session_id` 쿼리 값이 없었다. `config.js`에는 공개용 `sb_publishable_...` 키만 있으며 비밀키로 판정하지 않는다.
+### 비밀키 검사 결과
+
+2026-09-23에 아래 세 영역을 같은 기준으로 검사했다.
+
+| 검사 영역 | 실제 검사 대상 | 검사 수 | 비밀값 발견 | 판정 |
+| --- | --- | ---: | ---: | --- |
+| 브라우저 코드 | `public/index.html`, `styles.css`, `app.js`, `auth-crypto.mjs`, `config.js` | 5개 파일 | 0건 | 통과 |
+| 실제 배포 파일 | Vercel의 `/`, `/styles.css`, `/app.js`, `/auth-crypto.mjs`, `/config.js` | 5개 파일 | 0건 | 통과 |
+| Git 기록 | `git log --all -p` 전체 patch 기록과 그 안의 JWT 문자열 | 전체 브랜치 기록 | 0건 | 통과 |
+
+검사한 비밀값 형태는 다음과 같다.
+
+- 실제 `sb_secret_...` 형식의 Supabase secret key
+- `SUPABASE_SERVICE_ROLE_KEY`에 값이 대입된 형태
+- JWT payload를 복호화했을 때 `role`이 `service_role`인 token
+- `BEGIN … PRIVATE KEY` 형태의 PEM private-key header
+- 실제 값이 대입된 `AUTH_PRIVATE_JWK_B64`
+
+`public/config.js`와 실제 배포 `config.js`에는 공개용 `sb_publishable_...` 키가 있다. 이 값은 브라우저 배포가 전제된 공개 식별자이며 데이터 접근은 사용자 JWT와 RLS가 결정하므로 비밀키 발견 건수에 포함하지 않았다. `AUTH_PRIVATE_JWK_B64`라는 환경 변수 **이름**을 설명하는 문서·서버 코드는 허용하되 실제 값이 들어간 형태는 금지했다.
+
+배포 페이지가 실제로 요청한 REST URL 5개도 브라우저 자산 목록에서 확인했다. 어느 URL에도 access token, refresh token, `session_id` 쿼리 값이 없었으며 access token은 `Authorization` 헤더로만 전달됐다.
