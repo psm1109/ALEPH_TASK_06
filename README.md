@@ -64,6 +64,7 @@
 ## Supabase 설정
 
 1. Supabase 프로젝트의 SQL Editor에서 [`supabase/schema.sql`](supabase/schema.sql)을 실행합니다. 이 SQL은 RLS뿐 아니라 로그아웃된 세션을 Data API에서 즉시 거절하는 사전 요청 검사도 설정합니다.
+   기존 카드 1 스키마가 이미 적용된 프로젝트에는 [`supabase/card3-session-revocation.sql`](supabase/card3-session-revocation.sql)만 실행해 카드 3 변경을 증분 적용할 수 있습니다.
 2. Supabase Authentication의 Email provider를 활성화합니다. 과제 확인 중 가입 직후 로그인해야 한다면 Confirm email을 끕니다.
 3. [`public/config.js`](public/config.js)에 Project URL과 `sb_publishable_...` 형식의 Publishable key를 설정합니다.
 4. 가입 화면에서 기존 자료를 소유할 본인 계정을 만듭니다.
@@ -120,11 +121,13 @@ python -m http.server 4173 --directory public
 │  └─ config.js        # Project URL과 Publishable key
 ├─ scripts/
 │  ├─ generate-auth-key.mjs # Git 제외 대상 RSA 비밀키 파일 생성
-│  └─ verify-session-revocation.mjs # 같은 JWT의 로그아웃 전후 응답 비교
+│  ├─ verify-session-revocation.mjs # 시험 계정 자동 로그인 방식의 세션 비교
+│  └─ card3-browser-evidence.js # 로그인된 브라우저의 가린 세션 비교
 ├─ supabase/
 │  ├─ config.toml      # auth-gateway의 공개 호출 설정
 │  ├─ functions/auth-gateway/index.ts # 암호화된 인증 요청 중계
 │  ├─ schema.sql       # 사용자 소유권 열, RLS, 완료 중복 방지
+│  ├─ card3-session-revocation.sql # 기존 운영 DB용 즉시 세션 폐기 증분 SQL
 │  └─ card1-migrate-existing-data.sql # 기존 pds-main 자료 소유자 이관
 └─ contracts/
    └─ pds-schema-v2.json # 데이터 계약과 내보내기 규칙
@@ -149,6 +152,7 @@ node tests/card1-static.test.cjs
 node tests/card2-password.test.cjs
 node tests/auth-crypto.test.mjs
 node tests/card3-session.test.cjs
+node --check scripts/card3-browser-evidence.js
 ```
 
 배포 후 개발자 도구에서 로그인 요청을 확인할 때 `auth-gateway` POST의 Payload에는 `mode`, `encrypted_key`, `iv`, `ciphertext`만 있어야 합니다. `password` 필드나 입력한 비밀번호 원문이 보이면 통과로 판정하지 않습니다. Response·Console·화면과 Supabase Edge Function 로그에도 원문이 없어야 합니다.

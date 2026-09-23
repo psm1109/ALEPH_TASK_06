@@ -21,43 +21,30 @@ Supabase 공식 문서에 따르면 access token에는 만료 시각 `exp`와 �
 
 ## 같은 요청의 로그아웃 전후 비교
 
-아래 표는 `scripts/verify-session-revocation.mjs` 출력으로 채운다. 스크립트는 시험 계정으로 로그인한 뒤 아래의 **같은 URL, 같은 GET 방식, 같은 access token**을 정확히 두 번 보낸다. 두 요청 사이에서 바뀌는 것은 `POST /auth/v1/logout?scope=local` 실행 여부뿐이다. URL에는 token, `session_id`, 이메일을 넣지 않는다.
+아래 표는 운영 배포의 DevTools에서 `scripts/card3-browser-evidence.js`를 실행한 실제 출력이다. 스크립트는 브라우저에 이미 로그인된 access token을 메모리에서만 읽어 아래의 **같은 URL, 같은 GET 방식, 같은 access token**을 정확히 두 번 보낸다. 두 요청 사이에서 바뀌는 것은 `POST /auth/v1/logout?scope=local` 실행 여부뿐이다. URL에는 token, `session_id`, 이메일을 넣지 않는다.
 
 | 항목 | 로그인 상태 | 로그아웃 뒤 |
 | --- | --- | --- |
 | URL | `https://eidvougocycgramikbwq.supabase.co/rest/v1/plan_versions?select=id&limit=0` | 왼쪽과 같음 |
 | 방식 | `GET` | `GET` |
 | Authorization | `Bearer [가림]` | 왼쪽과 **동일한 값** 재사용 |
-| token 지문 | `[실행 전]` | `[실행 전 — 왼쪽과 같아야 함]` |
-| HTTP 응답 | `[실행 전 — 기대 200, 본문 []]` | `[실행 전 — 기대 401 또는 403]` |
+| token 지문 | `[가림] (SHA-256: f60c8a939bed…)` | 왼쪽과 같음 |
+| HTTP 응답 | `200`, 본문 `[]` | `403`, 코드 `42501`, `The authentication session is no longer active.` |
 | 차이 | 서버 세션 활성 | 서버 로그아웃으로 세션 제거 |
 
-현재 저장소에서는 서버 SQL과 검증 스크립트만 준비했다. 운영 Supabase에 `supabase/schema.sql`을 실행하고 실제 시험 계정으로 아래 검사를 마치기 전에는 이 표를 통과 증거로 판정하지 않는다.
+2026-09-23 14:27:10(Asia/Seoul)에 운영 배포 `https://aleph-task-06.vercel.app/`에서 검사했다. 첫 GET 뒤 `POST /auth/v1/logout?scope=local`은 `204`를 반환했고, 바로 이어 같은 access token으로 보낸 두 번째 GET은 `403`을 반환했다. 두 GET에서 URL·방식·헤더 값은 같고 로그아웃 여부만 달랐다.
 
-```powershell
-$env:PDS_TEST_EMAIL = Read-Host '시험 계정 이메일'
-$securePassword = Read-Host '시험 계정 비밀번호' -AsSecureString
-$passwordPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
-try {
-  $env:PDS_TEST_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($passwordPointer)
-  node scripts/verify-session-revocation.mjs
-} finally {
-  [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($passwordPointer)
-  Remove-Item Env:PDS_TEST_EMAIL, Env:PDS_TEST_PASSWORD -ErrorAction SilentlyContinue
-}
-```
-
-출력에는 token 원문 대신 `[가림]`과 SHA-256 지문 앞 12자리만 남는다. 출력의 `before_logout`, `after_logout`, `expires_at`, `lifetime_seconds`를 위 표와 아래 만료 기록에 옮기되 access token·refresh token·비밀번호는 복사하지 않는다.
+브라우저용 스크립트는 결과를 출력한 뒤 로컬 세션 사본을 지운다. 출력에는 token 원문 대신 `[가림]`과 SHA-256 지문 앞 12자리만 남겼으며 access token·refresh token·비밀번호·`session_id` 원문은 복사하지 않았다. 별도 시험 계정으로 자동 로그인부터 검사해야 할 때만 `scripts/verify-session-revocation.mjs`를 대안으로 사용한다.
 
 ## 만료 기록
 
-- access token 발급 시각(`iat`): `[실행 전]`
-- access token 만료 시각(`exp`): `[실행 전]`
-- 발급 후 만료까지: `[실행 전]초`
+- access token 발급 시각(`iat`): `2026-09-23 14:20:56+09:00`
+- access token 만료 시각(`exp`): `2026-09-23 15:20:56+09:00`
+- 발급 후 만료까지: `3,600초(1시간)`
 - 로그아웃하지 않은 경우: 브라우저가 refresh token으로 access token을 갱신하므로 세션은 계속될 수 있음
-- 로그아웃한 경우: `exp`를 기다리지 않고 `auth.sessions` 행 제거 직후 다음 Data API 요청부터 거절되어야 함
+- 로그아웃한 경우: `exp`를 기다리지 않고 `auth.sessions` 행 제거 직후 다음 Data API 요청부터 `403`으로 거절됨
 
-Supabase는 일반적으로 짧은 access token 수명을 권장하지만 실제 프로젝트 설정값은 검증 스크립트가 받은 JWT의 `iat`와 `exp`로 기록한다. 실행 전에는 기본값을 실제 결과처럼 적지 않는다.
+Supabase는 일반적으로 짧은 access token 수명을 권장한다. 이 기록의 1시간은 기본값을 추정한 것이 아니라 실제 JWT의 `iat`와 `exp` 차이로 계산한 값이다.
 
 ## URL·비밀키 점검
 
@@ -65,6 +52,6 @@ Supabase는 일반적으로 짧은 access token 수명을 권장하지만 실제
 - 브라우저에 배포되는 `public/config.js`의 `sb_publishable_...` 값은 공개용 Publishable key이며 JWT 서명 비밀키가 아니다.
 - JWT 서명키, `sb_secret_...`, service-role JWT, RSA private key는 브라우저 코드와 배포 폴더에 두지 않는다.
 - 인증 Payload 복호화용 RSA private key는 Git 제외 파일에서 Supabase secret으로만 설정한다.
-- `node tests/card3-session.test.cjs`는 현재 추적 파일과 전체 Git patch 기록에서 private-key PEM, 실제 `sb_secret_...`, service-role JWT, secret 환경 변수 값 형태를 검사한다.
+- `node tests/card3-session.test.cjs`는 현재 소스에서, `tests/git-secret-history.test.ps1`은 전체 Git patch 기록에서 private-key PEM, 실제 `sb_secret_...`, service-role JWT, secret 환경 변수 값 형태를 검사한다.
 
-2026-09-23 로컬 정적 검사 결과는 `PROJECT_CONTEXT.md`에 기록한다. 실제 배포 파일은 배포 뒤 별도로 확인해야 하며, 로컬 소스 검사만으로 배포 파일까지 확인했다고 적지 않는다.
+2026-09-23 실제 Vercel 배포의 `/`, `/config.js`, `/app.js`, `/auth-crypto.mjs`, `/styles.css` 다섯 파일을 메모리에서 읽어 같은 비밀값 패턴을 검사했고 발견 건수는 `0`이었다. 배포 페이지가 실제로 요청한 REST URL 5개도 자산 목록에서 확인했으며 어느 URL에도 access token, refresh token, `session_id` 쿼리 값이 없었다. `config.js`에는 공개용 `sb_publishable_...` 키만 있으며 비밀키로 판정하지 않는다.

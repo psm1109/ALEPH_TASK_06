@@ -5,8 +5,10 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 const schema = read("supabase/schema.sql");
+const migration = read("supabase/card3-session-revocation.sql");
 const app = read("public/app.js");
 const verifier = read("scripts/verify-session-revocation.mjs");
+const browserEvidence = read("scripts/card3-browser-evidence.js");
 
 assert.match(schema, /from auth\.sessions/);
 assert.match(schema, /auth\.sessions\.id::text = nullif\(auth\.jwt\(\) ->> 'session_id'/);
@@ -15,6 +17,8 @@ assert.match(schema, /security definer\s+set search_path = ''/);
 assert.match(schema, /alter role authenticator set pgrst\.db_pre_request = 'private\.check_auth_session'/);
 assert.match(schema, /raise insufficient_privilege/);
 assert.match(schema, /select private\.is_auth_session_active\(\)/);
+assert.match(migration, /alter role authenticator set pgrst\.db_pre_request = 'private\.check_auth_session'/);
+assert.match(migration, /from auth\.sessions/);
 
 assert.match(app, /Authorization: `Bearer \$\{state\.session\.access_token\}`/);
 assert.doesNotMatch(app, /[?&](?:access_token|refresh_token|session_id)=/);
@@ -25,6 +29,11 @@ assert.match(verifier, /expires_at:/);
 assert.match(verifier, /lifetime_seconds:/);
 assert.match(verifier, /token_in_url: false/);
 assert.match(verifier, /\[가림\]/);
+assert.equal((browserEvidence.match(/fetch\(url, \{ method, headers \}\)/g) || []).length, 2);
+assert.match(browserEvidence, /same_access_token_reused: true/);
+assert.match(browserEvidence, /token_in_url: url\.includes\(token\)/);
+assert.match(browserEvidence, /localStorage\.removeItem\(storageKey\)/);
+assert.doesNotMatch(browserEvidence, /console\.log\([^)]*(?:access_token|refresh_token)/);
 
 function assertNoPrivateSecrets(source, label) {
   const forbidden = [
@@ -62,4 +71,4 @@ for (const absolutePath of sourceFiles(root)) {
   if (!source.includes(0)) assertNoPrivateSecrets(source.toString("utf8"), path.relative(root, absolutePath));
 }
 
-console.log("card3 session checks: 18 passed");
+console.log("card3 session checks: 25 passed");
