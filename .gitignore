@@ -1,2 +1,3 @@
 /design/*
 /supabase/.env.auth.local
+/supabase/.temp/

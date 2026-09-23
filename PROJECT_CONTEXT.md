@@ -6,8 +6,8 @@
 
 - 저장소: `psm1109/ALEPH_TASK_06`
 - 작업 브랜치: `codex/card-1-auth`
-- 현재 기준 커밋: `1df28c5`
-- 작업 트리에는 카드 3 비밀키 검사 범위와 결과를 명확히 적는 문서 변경이 아직 커밋되지 않은 상태로 있습니다.
+- 현재 기준 커밋: `f5d16f4`
+- 작업 트리에는 카드 4 계정 간 소유권 격리 코드·검사·제출 문서 변경이 아직 커밋되지 않은 상태로 있습니다.
 - 원격 추적 브랜치: `origin/codex/card-1-auth`
 - 고정된 최종 T06 조상 커밋: `bab809b`
 - 현재 브랜치에는 병합 커밋 `59530ab`과 카드 1의 과거 커밋 두 개가 함께 있습니다. 앞으로는 현재 브랜치의 최신 파일과 HEAD를 기준으로 작업합니다.
@@ -101,6 +101,27 @@
 - `tests/git-secret-history.test.ps1`
 - `README.md`
 
+### 카드 4 — 계정 간 자료 소유권 격리
+
+- 시험 계정 두 개를 만들고 각 계정에 `tasks` 자료 2건을 생성했습니다. 비밀번호는 실행 중에만 무작위로 만들고 출력·저장하지 않았습니다.
+- RLS만 사용할 때 양방향 단건 읽기·수정·삭제가 실제 변경 없이 `200 []`로 끝나는 것을 재현했습니다.
+- `diary-data` Edge Function이 `id=eq...` 단건 요청을 같은 JWT로 먼저 조회하고, 소유하지 않은 행과 없는 행을 모두 `404`로 반환하도록 추가했습니다.
+- 브라우저 자료 요청을 직접 Data API 대신 `diary-data`를 통하도록 변경했습니다.
+- 주소·임의 헤더·본문의 다른 사용자 ID를 신뢰하지 않고 Supabase JWT의 `auth.uid()`와 RLS만 사용자 식별에 사용합니다.
+- 운영 Supabase에 `diary-data`를 배포하고 A→B, B→A 읽기·수정·삭제 6건이 모두 `404`인지 확인했습니다.
+- 거절 전후 양쪽 자료 수가 각각 `2 → 2`였고, 최종 목록에서 상대 자료가 0건인지 확인했습니다.
+- 비로그인 직접 요청은 `401`, 다른 사용자 ID를 넣은 삽입은 `403`으로 거절되는 것을 확인했습니다.
+
+관련 파일:
+
+- `supabase/functions/diary-data/index.ts`
+- `supabase/config.toml`
+- `public/app.js`
+- `scripts/verify-owner-isolation.mjs`
+- `tests/card4-owner-isolation.test.cjs`
+- `docs/card-4-owner-isolation.md`
+- `README.md`
+
 ## 완료한 확인
 
 저장소 루트에서 다음 명령을 실행합니다.
@@ -110,6 +131,7 @@ node tests\card1-static.test.cjs
 node tests\card2-password.test.cjs
 node tests\auth-crypto.test.mjs
 node tests\card3-session.test.cjs
+node tests\card4-owner-isolation.test.cjs
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\git-secret-history.test.ps1
 node --check public\app.js
 node --check scripts\generate-auth-key.mjs
@@ -124,11 +146,13 @@ git diff --check
 - 카드 2 비밀번호 검사: 23개 통과
 - 인증 Payload 암호화 실행 검사: 5개 통과
 - 카드 3 세션 정적·비밀값 검사: 25개 통과
+- 카드 4 소유자 격리 검사: 19개 통과
 - Git 전체 patch 기록 비밀값 검사: 통과
 - `public/app.js` 문법 검사: 통과
 - `scripts/generate-auth-key.mjs` 문법 검사: 통과
 - `scripts/verify-session-revocation.mjs` 문법 검사: 통과
 - `scripts/card3-browser-evidence.js` 문법 검사: 통과
+- `scripts/verify-owner-isolation.mjs` 문법 검사: 통과
 - RSA-OAEP-256 + AES-256-GCM 암호화·복호화 로컬 왕복 검사: 통과
 - `git diff --check`: 통과(LF→CRLF 안내만 표시)
 
@@ -157,18 +181,29 @@ git diff --check
 - 브라우저 배포 대상인 `public` 파일 5개를 별도로 다시 검사했고 private secret 패턴 발견 건수는 `0`이었습니다.
 - 검사 범위와 금지 패턴, 공개 `sb_publishable_...` 예외를 `docs/card-3-session-revocation.md`의 표에 기록했습니다.
 
+## 2026-09-23 카드 4 실제 운영 확인
+
+- 운영 Supabase 프로젝트에 `diary-data` Edge Function을 배포했습니다.
+- 시험 계정 A/B를 만들고 각 계정에 `tasks` 자료 2건을 생성했습니다. 비밀번호·token은 기록하지 않았습니다.
+- A→B 읽기·수정·삭제: 모두 HTTP `404`
+- B→A 읽기·수정·삭제: 모두 HTTP `404`
+- 거절 전후 건수: A `2 → 2`, B `2 → 2`
+- 주소의 B 사용자 ID 지정: HTTP `200`, 빈 배열
+- 임의 `X-User-Id` 헤더에 B 사용자 ID 지정: HTTP `200`, A 자료 2건만 반환
+- 본문 `user_id`에 B 사용자 ID 지정: HTTP `403`, 새 행 없음
+- 비로그인 직접 단건 요청: HTTP `401`
+- 최종 목록: A 목록에 B 자료 0건, B 목록에 A 자료 0건
+- 정확한 요청·응답과 시험 계정·자료 ID는 `docs/card-4-owner-isolation.md`에 기록했습니다.
+- 새 `public/app.js`는 아직 Git 커밋·푸시·Vercel 재배포하지 않았습니다.
+
 ## 아직 필요한 실제 확인
 
-다음 항목을 현재 Supabase 프로젝트에서 실행하기 전에는 카드 1과 카드 2를 완전히 통과했다고 적지 않습니다.
+다음 항목은 아직 완료하지 않았습니다.
 
-1. Supabase SQL Editor에서 `supabase/schema.sql`을 실행합니다. 클라우드 자료 접근 권한을 바꾸는 작업이므로 사용자의 명시적인 승인을 받습니다.
-2. Email provider 설정을 확인합니다. 실제 계정과 시험 계정의 비밀번호는 사용자가 직접 입력해야 하며 요청하거나 기록하지 않습니다.
-3. 본인 계정 한 개와 시험 계정 두 개를 만듭니다. 시험 계정 두 개에는 같은 비밀번호를 사용하되, 그 비밀번호를 저장소나 제출물에 적지 않습니다.
-4. `supabase/card1-migrate-existing-data.sql`에서 본인 계정 이메일 자리만 바꾼 뒤 실행합니다.
-5. `supabase/card2-password-evidence.sql`에서 시험 계정 이메일 두 곳만 바꾼 뒤 실행합니다.
-6. 출력된 bcrypt 해시를 `docs/card-2-password.md`에 옮깁니다. 해시는 과제에서 요구한 증거이지만 비밀번호·토큰·키는 계속 가립니다.
-7. 배포된 앱에서 로그인 요청 Payload가 `mode`, `encrypted_key`, `iv`, `ciphertext`만 포함하는지 확인합니다. Response·Console·화면·Edge Function 로그에서 시험 비밀번호 원문을 검색해 모두 0건인지 확인합니다.
-8. 로그인 헤더가 전혀 없는 REST 요청의 실제 응답도 카드 1 제출문에 기록합니다. 카드 3에서는 로그아웃 뒤 같은 JWT의 즉시 `403`만 확인했습니다.
+1. 카드 4의 `public/app.js` 변경을 커밋·푸시한 뒤 Vercel 앱을 재배포하고, 실제 화면의 생성·수정·삭제 회귀를 확인합니다.
+2. 기존 `pds-main` 자료를 본인 계정으로 이관해야 한다면 `supabase/card1-migrate-existing-data.sql`의 이메일 자리만 바꾼 뒤 실행합니다.
+3. 카드 2 제출을 위해 `supabase/card2-password-evidence.sql`의 시험 계정 이메일 두 곳을 바꿔 실행하고 bcrypt 해시 차이를 기록합니다.
+4. 배포된 앱에서 로그인 요청 Payload가 `mode`, `encrypted_key`, `iv`, `ciphertext`만 포함하는지 확인합니다. Response·Console·화면·Edge Function 로그에서 시험 비밀번호 원문을 검색해 모두 0건인지 확인합니다.
 
 ## 기존 자료 관련 주의사항
 
@@ -183,4 +218,4 @@ git diff --check
 
 ## 다음 작업
 
-카드 3은 운영 SQL 적용, 같은 access token의 `200 → 403` 비교, 실제 1시간 만료 정보, URL·배포 파일·Git 비밀값 검사를 완료했습니다. 다음에는 카드 1의 완전 비로그인 요청과 카드 2의 로그인 Payload·응답·Console·Edge Function 로그 원문 0건을 실제 운영 환경에서 기록합니다.
+카드 4 운영 API 검증과 제출문은 완료했습니다. 다음에는 변경을 커밋한 뒤 사용자 승인에 따라 원격에 올리고 Vercel 정적 앱을 재배포하여 실제 화면의 자료 생성·수정·삭제 회귀를 확인합니다. 카드 2의 로그인 Payload·응답·Console·Edge Function 로그 원문 0건 검증도 남아 있습니다.

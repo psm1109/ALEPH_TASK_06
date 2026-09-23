@@ -13,6 +13,7 @@
 - 로그인하지 않은 상태에서는 URL의 `#plan`, `#do`, `#see`, `#history`를 직접 열어도 다이어리 대신 로그인 화면이 나옵니다.
 - 모든 자료 요청은 세션 access token을 `Authorization` 헤더로 보내며 URL에는 싣지 않습니다.
 - 각 자료 행의 `user_id`가 서버의 `auth.uid()`와 같은지는 PostgreSQL RLS가 검사합니다.
+- 단건 자료 읽기·수정·삭제는 `diary-data` Edge Function이 같은 JWT로 소유 여부를 먼저 확인하고, 남의 자료와 없는 자료를 모두 `404`로 감춥니다.
 - 로그아웃된 JWT가 만료 전까지 재사용되는 것을 막기 위해 JWT의 `session_id`가 서버의 `auth.sessions`에 남아 있는지도 Data API 요청마다 검사합니다.
 - 로그인 실패 화면은 존재하지 않는 이메일과 틀린 비밀번호를 구별하지 않고 모두 `이메일 또는 비밀번호를 확인해 주세요.`라고 표시합니다.
 
@@ -124,8 +125,9 @@ python -m http.server 4173 --directory public
 │  ├─ verify-session-revocation.mjs # 시험 계정 자동 로그인 방식의 세션 비교
 │  └─ card3-browser-evidence.js # 로그인된 브라우저의 가린 세션 비교
 ├─ supabase/
-│  ├─ config.toml      # auth-gateway의 공개 호출 설정
+│  ├─ config.toml      # Edge Function 공개 호출 설정
 │  ├─ functions/auth-gateway/index.ts # 암호화된 인증 요청 중계
+│  ├─ functions/diary-data/index.ts # 단건 소유자 확인 및 Data API 중계
 │  ├─ schema.sql       # 사용자 소유권 열, RLS, 완료 중복 방지
 │  ├─ card3-session-revocation.sql # 기존 운영 DB용 즉시 세션 폐기 증분 SQL
 │  └─ card1-migrate-existing-data.sql # 기존 pds-main 자료 소유자 이관

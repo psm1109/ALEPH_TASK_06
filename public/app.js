@@ -241,7 +241,7 @@ async function supabaseRequest(table, { method = "GET", query = "", body } = {})
   if (!hasConfig()) throw new Error("Supabase 연결 정보가 필요합니다.");
   if (!state.session?.access_token) throw new Error("로그인이 필요합니다.");
 
-  const response = await fetch(`${state.config.url}/rest/v1/${table}${query ? `?${query}` : ""}`, {
+  const response = await fetch(`${state.config.url}/functions/v1/diary-data/${table}${query ? `?${query}` : ""}`, {
     method,
     headers: {
       apikey: state.config.publishableKey,
