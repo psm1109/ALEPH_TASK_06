@@ -27,79 +27,81 @@ test("오늘 완료한 할 일만 체크 상태이며 다음 날 초기화 대�
   assert.equal(taskNeedsDailyReset({ ...task, is_completed: false }, "2026-09-24"), false);
 });
 
-test("같은 할 일을 여러 날 완료하면 각 날짜에 체크한다", async () => {
-  const { completedTaskIdsForDate } = await dailyCompletion();
-  const events = [
-    { task_id: 7, completed_day: "2026-09-22", completed_at: "2026-09-22T10:00:00Z" },
-    { task_id: 7, completed_day: "2026-09-23", completed_at: "2026-09-23T10:00:00Z" },
+test("같은 할 일의 실행 기록은 날짜마다 완료 한 건으로 묶는다", async () => {
+  const { completionRecordsFromExecutions } = await dailyCompletion();
+  const logs = [
+    { task_id: 7, start_time: "2026-09-22T01:00:00Z", end_time: "2026-09-22T02:00:00Z" },
+    { task_id: 7, start_time: "2026-09-22T03:00:00Z", end_time: "2026-09-22T04:00:00Z" },
+    { task_id: 7, start_time: "2026-09-23T01:00:00Z", end_time: "2026-09-23T02:00:00Z" },
   ];
-  assert.deepEqual([...completedTaskIdsForDate(events, [], "2026-09-22", "2026-09-24")], ["7"]);
-  assert.deepEqual([...completedTaskIdsForDate(events, [], "2026-09-23", "2026-09-24")], ["7"]);
-  assert.equal(completedTaskIdsForDate(events, [], "2026-09-24", "2026-09-24").size, 0);
+  const records = completionRecordsFromExecutions(logs);
+  assert.deepEqual(records.map((record) => record.completed_day), ["2026-09-23", "2026-09-22"]);
+  assert.deepEqual(records.map((record) => record.task_id), [7, 7]);
 });
 
-test("돌아보기 완료 수는 집계 기간의 날짜별 완료 기록을 합산한다", async () => {
-  const { completionEventsForPeriod } = await dailyCompletion();
-  const events = [
-    { id: 1, task_id: 7, completed_day: "2026-09-21", completed_at: "2026-09-21T10:00:00Z" },
-    { id: 2, task_id: 7, completed_day: "2026-09-22", completed_at: "2026-09-22T10:00:00Z" },
-    { id: 3, task_id: 7, completed_day: "2026-09-23", completed_at: "2026-09-23T10:00:00Z" },
-    { id: 4, task_id: 8, completed_day: "2026-09-24", completed_at: "2026-09-24T10:00:00Z" },
+test("돌아보기 완료 수는 집계 기간의 실행 기록으로 만든 완료를 합산한다", async () => {
+  const { completionRecordsFromExecutions } = await dailyCompletion();
+  const logs = [
+    { task_id: 7, start_time: "2026-09-21T01:00:00Z", end_time: "2026-09-21T02:00:00Z" },
+    { task_id: 7, start_time: "2026-09-22T01:00:00Z", end_time: "2026-09-22T02:00:00Z" },
+    { task_id: 7, start_time: "2026-09-23T01:00:00Z", end_time: "2026-09-23T02:00:00Z" },
+    { task_id: 8, start_time: "2026-09-24T01:00:00Z", end_time: "2026-09-24T02:00:00Z" },
   ];
-  const records = completionEventsForPeriod(events, "2026-09-22", "2026-09-23");
-  assert.deepEqual(records.map((event) => event.id), [3, 2]);
-  assert.deepEqual(records.map((event) => event.task_id), [7, 7]);
+  const records = completionRecordsFromExecutions(logs, "2026-09-22", "2026-09-23");
+  assert.deepEqual(records.map((record) => record.completed_day), ["2026-09-23", "2026-09-22"]);
+  assert.deepEqual(records.map((record) => record.task_id), [7, 7]);
 });
 
-test("오늘 체크를 풀면 즉시 사라지고 다음 날에는 남아 있던 기록만 보인다", async () => {
-  const { completedTaskIdsForDate, removeTaskCompletionForDate } = await dailyCompletion();
-  const task = { id: 7, is_completed: true, completed_at: "2026-09-23T14:00:00Z" };
-  const firstEvent = { task_id: 7, completed_day: "2026-09-22", completed_at: "2026-09-22T14:00:00Z" };
-  assert.deepEqual([...completedTaskIdsForDate([firstEvent], [task], "2026-09-23", "2026-09-23")], ["7"]);
-  const sameDayEvent = { task_id: 7, completed_day: "2026-09-23", completed_at: task.completed_at };
-  assert.equal(completedTaskIdsForDate([firstEvent, sameDayEvent], [task], "2026-09-23", "2026-09-23").size, 1);
-  const unchecked = { ...task, is_completed: false, completed_at: null };
-  assert.equal(completedTaskIdsForDate([firstEvent, sameDayEvent], [unchecked], "2026-09-23", "2026-09-23").size, 0);
-  assert.deepEqual([...completedTaskIdsForDate([firstEvent], [unchecked], "2026-09-22", "2026-09-23")], ["7"]);
-  assert.deepEqual(removeTaskCompletionForDate(
-    [firstEvent, sameDayEvent], 7, "2026-09-23",
-  ), [firstEvent]);
+test("실행 기록이 있는 날짜에만 해당 할 일이 자동 완료된다", async () => {
+  const { taskHasExecutionForDate } = await dailyCompletion();
+  const log = { id: 1, task_id: 7, start_time: "2026-09-23T01:00:00Z" };
+  assert.equal(taskHasExecutionForDate([log], 7, "2026-09-23"), true);
+  assert.equal(taskHasExecutionForDate([log], 7, "2026-09-22"), false);
+  assert.equal(taskHasExecutionForDate([], 7, "2026-09-23"), false);
 });
 
-test("주간 칸에서 완료 체크와 실행 시간을 독립적으로 계산한다", async () => {
+test("주간 칸의 완료와 실행 시간은 같은 실행 기록에서 계산한다", async () => {
   const { weeklyDayRecord } = await dailyCompletion();
   const date = "2026-09-23";
-  const completedTask = { id: 7, is_completed: true, completed_at: "2026-09-23T12:00:00Z" };
-  const execution = { task_id: 7, start_time: "2026-09-23T12:05:00Z", actual_minutes: 89 };
-  assert.deepEqual(weeklyDayRecord([], [completedTask], [], date, date), {
-    completionCount: 1, executionCount: 0, minutes: 0,
+  const first = { task_id: 7, start_time: "2026-09-23T01:05:00Z", actual_minutes: 40 };
+  const second = { task_id: 7, start_time: "2026-09-23T03:05:00Z", actual_minutes: 49 };
+  const otherTask = { task_id: 8, start_time: "2026-09-23T05:05:00Z", actual_minutes: 11 };
+  assert.deepEqual(weeklyDayRecord([], date), {
+    completionCount: 0, executionCount: 0, minutes: 0,
   });
-  assert.deepEqual(weeklyDayRecord([], [], [execution], date, date), {
-    completionCount: 0, executionCount: 1, minutes: 89,
+  assert.deepEqual(weeklyDayRecord([first, second], date), {
+    completionCount: 1, executionCount: 2, minutes: 89,
   });
-  assert.deepEqual(weeklyDayRecord([], [completedTask], [execution], date, date), {
-    completionCount: 1, executionCount: 1, minutes: 89,
+  assert.deepEqual(weeklyDayRecord([first, second, otherTask], date), {
+    completionCount: 2, executionCount: 3, minutes: 100,
   });
-  assert.deepEqual(weeklyDayRecord([], [{ ...completedTask, is_completed: false }], [execution], date, date), {
-    completionCount: 0, executionCount: 1, minutes: 89,
+  assert.deepEqual(weeklyDayRecord([first], "2026-09-22"), {
+    completionCount: 0, executionCount: 0, minutes: 0,
   });
 });
 
-test("완료 직후 주간 화면을 갱신하고 날짜 변경 시 저장 상태를 동기화한다", () => {
+test("완료 체크는 직접 조작할 수 없고 실행 기록에 따라 렌더링한다", () => {
   const app = read("public/app.js");
-  assert.match(app, /weeklyDayRecord\(\s*state\.completionEvents, state\.tasks, state\.taskExecutions, iso/);
-  assert.match(app, /state\.tasks = state\.tasks\.map\([\s\S]*?renderWeek\(\);\s*renderTasks\(\);/);
+  assert.match(app, /const completed = todayExecutionLogs\.length > 0/);
+  assert.match(app, /title="완료 상태는 오늘 실행 기록에 따라 자동으로 정해집니다\."[\s\S]*?disabled/);
+  assert.doesNotMatch(app, /data-action="toggle-task"/);
+  assert.doesNotMatch(app, /addEventListener\("change"[\s\S]*?toggle-task/);
+  assert.match(app, /completionRecordsFromExecutions\(state\.taskExecutions, plan\.start_date, plan\.end_date\)/);
+  assert.match(app, /weeklyDayRecord\(state\.taskExecutions, iso\)/);
+});
+
+test("실행 기록 변경 직후 주간과 할 일과 돌아보기를 함께 갱신한다", () => {
+  const app = read("public/app.js");
+  assert.match(app, /state\.taskExecutions = state\.taskExecutions\.filter[\s\S]*?renderWeek\(\);[\s\S]*?renderTasks\(\);[\s\S]*?renderCompletionSummary\(\)/);
+  assert.match(app, /state\.taskExecutions\.unshift\(saved\)[\s\S]*?renderWeek\(\);[\s\S]*?renderTasks\(\);[\s\S]*?renderCompletionSummary\(\)/);
   assert.match(app, /document\.addEventListener\("visibilitychange"/);
   assert.match(app, /await resetExpiredTaskCompletions\(toSeoulISODate\(\)\)/);
-  assert.match(app, /saved && !completed[\s\S]*?removeTaskCompletionForDate\([\s\S]*?renderCompletionSummary\(\)[\s\S]*?await refreshCompletionEvents\(\)/);
 });
 
-test("당일 해제는 이벤트를 제거하고 자정 후 초기화는 전날 이벤트를 보존한다", () => {
+test("기존 완료 이벤트 테이블은 소유자별로 보호한다", () => {
   for (const file of ["supabase/schema.sql", "supabase/daily-completion.sql"]) {
     const sql = read(file);
     assert.match(sql, /on public\.task_completion_events \(user_id, task_id, completed_day\)/);
-    assert.match(sql, /on conflict \(user_id, task_id, completed_day\)\s+do update set completed_at = excluded\.completed_at/);
-    assert.match(sql, /elsif old\.is_completed = true and new\.is_completed = false then/);
-    assert.match(sql, /delete from public\.task_completion_events\s+where user_id = old\.user_id and task_id = old\.id\s+and completed_day = \(now\(\) at time zone 'Asia\/Seoul'\)::date/);
   }
+  assert.match(read("supabase/schema.sql"), /create policy "owner task completion events read"/);
 });

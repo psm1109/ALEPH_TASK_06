@@ -160,7 +160,7 @@
                 <div id="week-grid" class="week-grid"></div>
                 <div id="week-empty" class="empty-action">
                   <span aria-hidden="true">▧</span>
-                  <span><strong>아직 완료나 실행 기록이 없어요</strong><small>오늘 체크는 해제할 수 있고 날짜가 바뀌면 확정돼요</small></span>
+                  <span><strong>아직 실행 기록이 없어요</strong><small>실행 기록을 남기면 해당 날짜가 자동으로 완료 처리돼요</small></span>
                 </div>
               </article>
 
@@ -263,7 +263,7 @@
           </div>
           <div id="see-metrics" class="see-metrics">
             <button class="see-metric is-active" type="button" data-see-evidence="planned"><span>할 일 수</span><strong id="see-task-count">0</strong><small>현재 계획에 연결됨</small></button>
-            <button class="see-metric" type="button" data-see-evidence="completed"><span>완료 수</span><strong id="see-completion-count">0</strong><small>집계 기간 내 완료 기록</small></button>
+            <button class="see-metric" type="button" data-see-evidence="completed"><span>완료 수</span><strong id="see-completion-count">0</strong><small>실행 기록이 있는 할 일</small></button>
             <button class="see-metric" type="button" data-see-evidence="overdue"><span>지연 수</span><strong id="see-overdue-count">0</strong><small>지난 날짜별 미완료</small></button>
             <button class="see-metric" type="button" data-see-evidence="blocked"><span>막힘 수</span><strong id="see-blocked-count">0</strong><small>할 일 중복 제외</small></button>
             <button class="see-metric" type="button" data-see-evidence="expected"><span>예상 시간</span><strong id="see-expected-time">0분</strong><small>할 일 예상 합계</small></button>
@@ -276,8 +276,8 @@
             <div id="see-evidence-list" class="see-evidence-list"></div>
           </article>
           <article class="card completion-history-card">
-            <div class="card-heading compact"><div><span class="section-kicker">COMPLETION EVENTS</span><h2>완료 집계 내역</h2></div></div>
-            <p class="card-description">현재 완료 체크된 할 일만 완료 날짜별로 표시합니다.</p>
+            <div class="card-heading compact"><div><span class="section-kicker">EXECUTION COMPLETION</span><h2>오늘 실행 완료 내역</h2></div></div>
+            <p class="card-description">오늘 실행 기록이 있는 할 일만 표시합니다.</p>
             <div id="completion-event-list" class="completion-event-list"></div>
           </article>
           <article class="card next-plan-card">

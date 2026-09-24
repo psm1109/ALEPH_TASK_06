@@ -25,48 +25,40 @@ export function millisecondsUntilNextSeoulDay(now = new Date()) {
   return Math.max(1000, nextMidnight - now.getTime() + 100);
 }
 
-export function completedTaskIdsForDate(events, tasks, date, today = toSeoulISODate()) {
-  // Today's display follows the current checkbox state. A completion event
-  // becomes historical evidence only after that Seoul calendar day ends.
-  if (date === today) {
-    return new Set(tasks
-      .filter((task) => isTaskCompletedToday(task, today))
-      .map((task) => String(task.id)));
-  }
-
-  const ids = new Set(events
-    .filter((event) => (event.completed_day || toSeoulISODate(event.completed_at)) === date)
-    .map((event) => String(event.task_id)));
-  return ids;
-}
-
-export function completionEventsForPeriod(events, startDate, endDate) {
-  if (!startDate || !endDate) return [];
-  return events
-    .map((event) => ({
-      ...event,
-      completed_day: event.completed_day || toSeoulISODate(event.completed_at),
-    }))
-    .filter((event) => event.completed_day >= startDate && event.completed_day <= endDate)
-    .sort((a, b) => {
-      const dayOrder = b.completed_day.localeCompare(a.completed_day);
-      if (dayOrder) return dayOrder;
-      return new Date(b.completed_at || 0) - new Date(a.completed_at || 0);
-    });
-}
-
-export function removeTaskCompletionForDate(events, taskId, date) {
-  return events.filter((event) => (
-    String(event.task_id) !== String(taskId)
-    || (event.completed_day || toSeoulISODate(event.completed_at)) !== date
+export function taskHasExecutionForDate(executionLogs, taskId, date) {
+  return executionLogs.some((log) => (
+    String(log.task_id) === String(taskId) && toSeoulISODate(log.start_time) === date
   ));
 }
 
-export function weeklyDayRecord(events, tasks, executionLogs, date, today = toSeoulISODate()) {
-  const completionCount = completedTaskIdsForDate(events, tasks, date, today).size;
+export function completionRecordsFromExecutions(executionLogs, startDate = "", endDate = "") {
+  const records = new Map();
+  for (const log of executionLogs) {
+    const completedDay = toSeoulISODate(log.start_time);
+    if (!completedDay) continue;
+    if (startDate && completedDay < startDate) continue;
+    if (endDate && completedDay > endDate) continue;
+    const key = `${String(log.task_id)}:${completedDay}`;
+    const previous = records.get(key);
+    if (!previous || new Date(log.end_time || log.start_time) > new Date(previous.completed_at)) {
+      records.set(key, {
+        task_id: log.task_id,
+        completed_day: completedDay,
+        completed_at: log.end_time || log.start_time,
+      });
+    }
+  }
+  return [...records.values()].sort((a, b) => {
+    const dayOrder = b.completed_day.localeCompare(a.completed_day);
+    if (dayOrder) return dayOrder;
+    return new Date(b.completed_at || 0) - new Date(a.completed_at || 0);
+  });
+}
+
+export function weeklyDayRecord(executionLogs, date) {
   const entries = executionLogs.filter((log) => toSeoulISODate(log.start_time) === date);
   return {
-    completionCount,
+    completionCount: new Set(entries.map((log) => String(log.task_id))).size,
     executionCount: entries.length,
     minutes: entries.reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0),
   };

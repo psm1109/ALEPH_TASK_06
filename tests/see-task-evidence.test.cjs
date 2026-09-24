@@ -29,7 +29,7 @@ test("완료 수는 집계 기간의 완료 기록을 세고 날짜별 펼치기
     app.indexOf("function renderSeeEvidence"),
     app.indexOf("function renderCompletionHistory"),
   );
-  assert.match(html, /data-see-evidence="completed"><span>완료 수<\/span>[\s\S]*?<small>집계 기간 내 완료 기록<\/small>/);
+  assert.match(html, /data-see-evidence="completed"><span>완료 수<\/span>[\s\S]*?<small>실행 기록이 있는 할 일<\/small>/);
   assert.match(app, /\$\("#see-completion-count"\)\.textContent = summary\.periodCompletionEvents\.length/);
   assert.match(evidenceRenderer, /state\.seeEvidenceType === "completed"/);
   assert.match(evidenceRenderer, /<details class="execution-date-group">/);

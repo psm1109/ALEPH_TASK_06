@@ -2,10 +2,9 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { encryptAuthCredentials } from "./auth-crypto.mjs";
 import { missedDaysToRecord } from "./missed-days.mjs";
 import {
-  completionEventsForPeriod,
-  isTaskCompletedToday,
+  completionRecordsFromExecutions,
   millisecondsUntilNextSeoulDay,
-  removeTaskCompletionForDate,
+  taskHasExecutionForDate,
   taskNeedsDailyReset,
   toSeoulISODate,
   weeklyDayRecord,
@@ -31,7 +30,6 @@ const state = {
   editingExecutionId: null,
   editingReflectionId: null,
   seeEvidenceType: "planned",
-  pendingTaskIds: new Set(),
   taskQuery: {
     search: "",
     status: "all",
@@ -145,7 +143,6 @@ function clearDiaryState() {
   state.taskExecutions = [];
   state.completionEvents = [];
   state.missedDays = [];
-  state.pendingTaskIds.clear();
 }
 
 function showSignedOutScreen(message = "") {
@@ -328,7 +325,7 @@ async function connectAndLoad({ announce = true } = {}) {
     ]);
 
     const pendingMissedDays = missedDaysToRecord(
-      tasks, completionEvents, missedDays, toSeoulISODate(), WORKSPACE_ID,
+      tasks, completionRecordsFromExecutions(taskExecutions), missedDays, toSeoulISODate(), WORKSPACE_ID,
     );
     if (pendingMissedDays.length) {
       for (let index = 0; index < pendingMissedDays.length; index += 200) {
@@ -535,9 +532,7 @@ function renderWeek() {
     const date = new Date(monday);
     date.setDate(monday.getDate() + index);
     const iso = toISODate(date);
-    const { completionCount, executionCount, minutes } = weeklyDayRecord(
-      state.completionEvents, state.tasks, state.taskExecutions, iso,
-    );
+    const { completionCount, executionCount, minutes } = weeklyDayRecord(state.taskExecutions, iso);
     weekActivityCount += completionCount + executionCount;
     const cell = document.createElement("div");
     cell.className = `day-cell${completionCount ? " has-completion" : ""}${executionCount ? " has-execution" : ""}`;
@@ -579,8 +574,8 @@ function filteredAndSortedTasks() {
     .filter((task) => {
       const searchable = `${task.title} ${(task.tags || []).join(" ")}`.toLocaleLowerCase("ko");
       if (search && !searchable.includes(search)) return false;
-      if (query.status === "active" && isTaskCompletedToday(task)) return false;
-      if (query.status === "completed" && !isTaskCompletedToday(task)) return false;
+      if (query.status === "active" && isTaskCompletedForDate(task.id)) return false;
+      if (query.status === "completed" && !isTaskCompletedForDate(task.id)) return false;
       if (query.priority !== "all" && task.priority !== query.priority) return false;
       if (query.tag !== "all" && !(task.tags || []).includes(query.tag)) return false;
       return true;
@@ -599,14 +594,18 @@ function formatMinutes(value) {
   return rest ? `${hours}시간 ${rest}분` : `${hours}시간`;
 }
 
+function isTaskCompletedForDate(taskId, date = toSeoulISODate()) {
+  return taskHasExecutionForDate(state.taskExecutions, taskId, date);
+}
+
 function isOverdue(task) {
-  return !isTaskCompletedToday(task) && String(task.due_date).slice(0, 10) < toSeoulISODate();
+  return !isTaskCompletedForDate(task.id) && String(task.due_date).slice(0, 10) < toSeoulISODate();
 }
 
 function renderTasks() {
   renderTaskTagFilter();
   const tasks = filteredAndSortedTasks();
-  const completedCount = state.tasks.filter((task) => isTaskCompletedToday(task)).length;
+  const completedCount = state.tasks.filter((task) => isTaskCompletedForDate(task.id)).length;
   const sortLabels = {
     due_asc: "마감 임박순",
     priority_desc: "우선순위 높은 순",
@@ -633,13 +632,13 @@ function renderTasks() {
 
   list.innerHTML = tasks.map((task) => {
     const taskId = escapeHTML(task.id);
-    const completed = isTaskCompletedToday(task);
     const tags = (task.tags || []).map((tag) => `<span class="task-tag">#${escapeHTML(tag)}</span>`).join("");
-    const overdue = isOverdue(task);
     const today = toSeoulISODate();
     const todayExecutionLogs = state.taskExecutions.filter((log) =>
       String(log.task_id) === String(task.id) && executionDate(log) === today,
     );
+    const completed = todayExecutionLogs.length > 0;
+    const overdue = isOverdue(task);
     const linkedLogs = todayExecutionLogs.length ? `
       <details class="task-linked-logs">
         <summary>오늘 실행 기록 ${todayExecutionLogs.length}건</summary>
@@ -662,11 +661,11 @@ function renderTasks() {
         <input
           class="task-check"
           type="checkbox"
-          data-action="toggle-task"
           data-task-id="${taskId}"
-          aria-label="${completed ? "진행 중으로 되돌리기" : "완료로 변경"}: ${escapeHTML(task.title)}"
+          aria-label="${completed ? "오늘 실행 기록이 있어 완료됨" : "오늘 실행 기록을 남기면 자동 완료됨"}: ${escapeHTML(task.title)}"
+          title="완료 상태는 오늘 실행 기록에 따라 자동으로 정해집니다."
           ${completed ? "checked" : ""}
-          ${state.pendingTaskIds.has(String(task.id)) ? "disabled" : ""}
+          disabled
         />
         <div class="task-main">
           <h3 class="task-title">${escapeHTML(task.title)}</h3>
@@ -764,9 +763,9 @@ function formatSignedMinutes(value) {
 function getSeeSummary() {
   const tasks = [...state.tasks];
   const plan = currentPlan();
-  const completedTasks = tasks.filter((task) => isTaskCompletedToday(task));
+  const completedTasks = tasks.filter((task) => isTaskCompletedForDate(task.id));
   const periodCompletionEvents = plan
-    ? completionEventsForPeriod(state.completionEvents, plan.start_date, plan.end_date)
+    ? completionRecordsFromExecutions(state.taskExecutions, plan.start_date, plan.end_date)
     : [];
   const blockedTasks = tasks.filter((task) => blockerReasonsForTask(task.id).length > 0);
   const expectedMinutes = tasks.reduce((sum, task) => sum + Number(task.estimated_minutes || 0), 0);
@@ -780,6 +779,22 @@ function getSeeSummary() {
     actualMinutes,
     gapMinutes: actualMinutes - expectedMinutes,
   };
+}
+
+function executionLogsForTaskOnDate(taskId, date) {
+  return state.taskExecutions.filter((log) => (
+    String(log.task_id) === String(taskId) && executionDate(log) === date
+  ));
+}
+
+function actualMinutesForTaskOnDate(taskId, date) {
+  return executionLogsForTaskOnDate(taskId, date)
+    .reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0);
+}
+
+function latestExecutionForTaskOnDate(taskId, date) {
+  return executionLogsForTaskOnDate(taskId, date)
+    .sort((a, b) => new Date(b.end_time || b.start_time) - new Date(a.end_time || a.start_time))[0] || null;
 }
 
 function tasksForCurrentPlan(tasks = state.tasks) {
@@ -869,22 +884,18 @@ function renderSeeEvidence(summary) {
 function renderCompletionHistory(summary) {
   const list = $("#completion-event-list");
   if (!summary.completedTasks.length) {
-    list.innerHTML = '<div class="task-empty"><strong>현재 완료된 할 일이 없어요</strong><p>완료 체크가 유지된 할 일만 여기에 표시됩니다.</p></div>';
+    list.innerHTML = '<div class="task-empty"><strong>오늘 실행 완료한 할 일이 없어요</strong><p>오늘 실행 기록이 생기면 여기에 자동으로 표시됩니다.</p></div>';
     return;
   }
 
-  const groups = new Map();
-  [...summary.completedTasks]
-    .sort((a, b) => new Date(b.completed_at || b.updated_at || b.created_at) - new Date(a.completed_at || a.updated_at || a.created_at))
-    .forEach((task) => {
-      const date = toSeoulISODate(task.completed_at || task.updated_at || task.created_at);
-      if (!groups.has(date)) groups.set(date, []);
-      groups.get(date).push(task);
-    });
   const today = toSeoulISODate();
+  const groups = new Map([[today, [...summary.completedTasks].sort((a, b) => (
+    new Date(latestExecutionForTaskOnDate(b.id, today)?.end_time || 0)
+    - new Date(latestExecutionForTaskOnDate(a.id, today)?.end_time || 0)
+  ))]]);
 
   list.innerHTML = [...groups.entries()].map(([date, tasks]) => {
-    const dateActualMinutes = tasks.reduce((sum, task) => sum + actualMinutesForTask(task.id), 0);
+    const dateActualMinutes = tasks.reduce((sum, task) => sum + actualMinutesForTaskOnDate(task.id, date), 0);
     return `
       <details class="execution-date-group completion-date-group" ${date === today ? "open" : ""}>
         <summary>
@@ -893,10 +904,11 @@ function renderCompletionHistory(summary) {
         </summary>
         <div class="completion-date-list">
           ${tasks.map((task) => {
-            const actualMinutes = actualMinutesForTask(task.id);
+            const actualMinutes = actualMinutesForTaskOnDate(task.id, date);
+            const latestExecution = latestExecutionForTaskOnDate(task.id, date);
             return `
               <article class="completion-task-card">
-                <div><strong>✓ ${escapeHTML(task.title)}</strong><small>${formatTime(task.completed_at || task.updated_at || task.created_at)} 완료</small></div>
+                <div><strong>✓ ${escapeHTML(task.title)}</strong><small>${formatTime(latestExecution?.end_time || latestExecution?.start_time)} 실행 완료</small></div>
                 <div class="completion-task-times">
                   <span>예상 ${formatMinutes(task.estimated_minutes)}</span>
                   <strong>실행 기록 합계 ${formatMinutes(actualMinutes)}</strong>
@@ -1304,14 +1316,6 @@ async function deleteExecutionLog(executionLog) {
   }
 }
 
-async function refreshCompletionEvents() {
-  state.completionEvents = await loadAllRows(
-    "task_completion_events", `workspace_id=eq.${WORKSPACE_ID}&order=completed_at.desc,id.desc`,
-  );
-  renderWeek();
-  renderCompletionSummary();
-}
-
 async function updateTask(taskId, changes, successMessage) {
   setLoading(true);
   try {
@@ -1414,45 +1418,6 @@ function bindEvents() {
   $("#task-sort").addEventListener("change", (event) => {
     state.taskQuery.sort = event.target.value;
     renderTasks();
-  });
-
-  $("#task-list").addEventListener("change", async (event) => {
-    const checkbox = event.target.closest('[data-action="toggle-task"]');
-    if (!checkbox) return;
-    const task = findTask(checkbox.dataset.taskId);
-    if (!task || !requireConnection()) {
-      renderTasks();
-      return;
-    }
-    const pendingId = String(task.id);
-    if (state.pendingTaskIds.has(pendingId)) {
-      renderTasks();
-      return;
-    }
-    const completed = checkbox.checked;
-    state.pendingTaskIds.add(pendingId);
-    renderTasks();
-    try {
-      const saved = await updateTask(task.id, {
-        is_completed: completed,
-        completed_at: completed ? new Date().toISOString() : null,
-      }, completed ? "할 일을 완료로 변경했습니다." : "할 일을 다시 진행 중으로 되돌렸습니다.");
-      if (saved && !completed) {
-        state.completionEvents = removeTaskCompletionForDate(
-          state.completionEvents, task.id, toSeoulISODate(),
-        );
-        renderWeek();
-        renderCompletionSummary();
-      }
-      if (saved) await refreshCompletionEvents();
-    } catch (error) {
-      showNotice(`완료 집계를 불러오지 못했습니다. ${error.message}`, "error");
-    } finally {
-      window.setTimeout(() => {
-        state.pendingTaskIds.delete(pendingId);
-        renderTasks();
-      }, 700);
-    }
   });
 
   $("#task-list").addEventListener("click", (event) => {

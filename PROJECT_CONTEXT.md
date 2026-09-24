@@ -6,8 +6,8 @@
 
 - 저장소: `psm1109/ALEPH_TASK_06`
 - 작업 브랜치: `codex/card-1-auth`
-- 현재 기준 커밋: `1ee9cfc`
-- 완료 수 집계 변경은 커밋되어 있으며, 작업 트리에는 아래 완료 체크 해제 동기화 변경이 아직 커밋되지 않은 상태로 남아 있습니다.
+- 현재 기준 커밋: `b54f26c`
+- 완료 체크 해제 동기화 변경까지 커밋되어 있으며, 작업 트리에는 아래 실행 기록 기반 자동 완료 변경이 아직 커밋되지 않은 상태로 남아 있습니다.
 - 원격 추적 브랜치: `origin/codex/card-1-auth`
 - 고정된 최종 T06 조상 커밋: `bab809b`
 - 현재 브랜치에는 병합 커밋 `59530ab`과 카드 1의 과거 커밋 두 개가 함께 있습니다. 앞으로는 현재 브랜치의 최신 파일과 HEAD를 기준으로 작업합니다.
@@ -299,6 +299,40 @@ git diff --check
 확인하지 않은 항목:
 
 - 요청에 따라 로그인 후 실제 체크 해제 화면 확인은 실행하지 않았습니다.
+
+### 2026-09-24 실행 기록 기반 자동 완료
+
+- Plan 탭의 완료 체크박스를 읽기 전용으로 바꿔 직접 클릭으로 완료 상태를 바꿀 수 없게 했습니다.
+- 오늘 해당 할 일에 실행 기록이 하나 이상 있으면 자동 체크하고, 실행 기록이 없으면 체크하지 않습니다.
+- 같은 할 일의 같은 날짜 실행 기록이 여러 건이어도 완료 수는 1건으로 계산합니다.
+- 마지막 실행 기록을 삭제하거나 실행 기록의 날짜·연결 할 일을 수정하면 Plan 체크, 주간 완료 수, 돌아보기 완료 수와 근거 목록이 함께 다시 계산됩니다.
+- 날짜별 미완료 판단도 별도 체크 기록이 아니라 실행 기록에서 만든 할 일·날짜별 완료 자료를 사용합니다.
+- 기존 `task_completion_events`는 호환과 내보내기를 위해 보존하지만 현재 화면 완료 계산에는 사용하지 않습니다. 데이터베이스 SQL이나 운영 자료는 변경하지 않았습니다.
+
+관련 파일:
+
+- `public/app.js`
+- `public/daily-completion.mjs`
+- `public/index.html`
+- `public/styles.css`
+- `tests/week-record-separation.test.cjs`
+- `tests/see-task-evidence.test.cjs`
+- `contracts/pds-schema-v2.json`
+- `README.md`
+- `PROJECT_CONTEXT.md`
+
+실행한 검사:
+
+- `node tests\\week-record-separation.test.cjs` — 9개 통과
+- `node tests\\see-task-evidence.test.cjs` — 3개 통과
+- `tests`의 `*.test.cjs`, `*.test.mjs` 전체 Node 검사 — 26개 통과, 실패 0개
+- `node --check public\\app.js` — 통과
+- `contracts/pds-schema-v2.json` JSON 파싱 — 통과
+- `git diff --check` — 통과(LF→CRLF 안내만 표시)
+
+확인하지 않은 항목:
+
+- 요청에 따라 로그인 후 실행 기록 추가·수정·삭제에 따른 실제 화면 변화는 확인하지 않았습니다.
 
 ## 아직 필요한 실제 확인
 
