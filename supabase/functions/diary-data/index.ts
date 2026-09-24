@@ -1,3 +1,5 @@
+import { forwardResponse } from "./forward-response.mjs";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "apikey, authorization, content-type, prefer",
@@ -53,10 +55,7 @@ function restHeaders(request: Request, anonKey: string) {
 }
 
 async function forward(upstream: Response) {
-  return new Response(await upstream.arrayBuffer(), {
-    status: upstream.status,
-    headers: responseHeaders(upstream),
-  });
+  return forwardResponse(upstream, responseHeaders(upstream));
 }
 
 Deno.serve(async (request) => {
