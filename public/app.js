@@ -811,12 +811,14 @@ function tasksForCurrentPlan(tasks = state.tasks) {
 function missedDaysForCurrentPlan(tasks = state.tasks) {
   const plan = currentPlan();
   if (!plan) return [];
-  const taskIds = new Set(tasksForCurrentPlan(tasks).map((task) => String(task.id)));
-  return state.missedDays.filter((record) => (
-    taskIds.has(String(record.task_id))
-    && record.missed_day >= plan.start_date
-    && record.missed_day <= plan.end_date
-  ));
+  return missedDaysToRecord(
+    tasksForCurrentPlan(tasks),
+    completionRecordsFromExecutions(state.taskExecutions, plan.start_date, plan.end_date),
+    [],
+    toSeoulISODate(),
+    WORKSPACE_ID,
+    { startDate: plan.start_date, endDate: plan.end_date },
+  );
 }
 
 function renderSeeEvidence(summary) {
@@ -849,7 +851,7 @@ function renderSeeEvidence(summary) {
       button.classList.toggle("is-active", button.dataset.seeEvidence === "overdue");
     });
     $("#see-evidence-title").textContent = "날짜별 지연 기록";
-    $("#see-evidence-description").textContent = "집계 기간의 지난 날짜마다 실행 기록이 없었던 할 일을 표시합니다.";
+    $("#see-evidence-description").textContent = "계획 시작일부터 오늘까지 날짜마다 실행 기록이 없었던 할 일을 표시합니다.";
     const periodMissedDays = missedDaysForCurrentPlan(summary.tasks);
     $("#see-evidence-count").textContent = `${periodMissedDays.length}건`;
     const groups = new Map();
@@ -868,7 +870,7 @@ function renderSeeEvidence(summary) {
           `).join("")}</div>
         </details>
       `).join("")
-      : '<div class="task-empty"><strong>지난 날짜의 미완료 기록이 없어요</strong></div>';
+      : '<div class="task-empty"><strong>오늘까지 미완료 기록이 없어요</strong></div>';
     return;
   }
   const currentPlanTasks = tasksForCurrentPlan(summary.tasks);

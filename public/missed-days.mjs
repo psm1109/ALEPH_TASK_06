@@ -16,11 +16,11 @@ export function missedDaysToRecord(
 
   for (const task of tasks) {
     const createdDay = toSeoulISODate(task.created_at);
-    if (!createdDay) continue;
-    // A task is evaluated on every finished day when it existed inside the
-    // current plan period. Its due date does not postpone daily completion.
-    const firstDay = startDate && startDate > createdDay ? startDate : createdDay;
-    for (let day = firstDay; day < today && (!endDate || day <= endDate); day = nextISODate(day)) {
+    const firstDay = startDate || createdDay;
+    if (!firstDay) continue;
+    // The review treats the current task list as the plan's daily target, so
+    // every plan day through today must use the same task count.
+    for (let day = firstDay; day <= today && (!endDate || day <= endDate); day = nextISODate(day)) {
       const key = `${task.id}:${day}`;
       if (completed.has(key) || recorded.has(key)) continue;
       pending.push({
