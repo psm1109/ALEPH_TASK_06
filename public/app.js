@@ -373,6 +373,10 @@ function executionDate(executionLog) {
   return toSeoulISODate(executionLog.start_time);
 }
 
+function completionDate(completionEvent) {
+  return toSeoulISODate(completionEvent.completed_at);
+}
+
 function formatDate(value, separator = ".") {
   const date = parseLocalDate(value);
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join(separator);
@@ -485,22 +489,23 @@ function renderWeek() {
   const weekdays = ["월", "화", "수", "목", "금", "토", "일"];
   const weekGrid = $("#week-grid");
   weekGrid.innerHTML = "";
-  let weekEntryCount = 0;
+  let weekActivityCount = 0;
 
   weekdays.forEach((weekday, index) => {
     const date = new Date(monday);
     date.setDate(monday.getDate() + index);
     const iso = toISODate(date);
-    const entries = state.taskExecutions.filter((item) => executionDate(item) === iso);
-    const minutes = entries.reduce((sum, item) => sum + Number(item.actual_minutes || 0), 0);
-    weekEntryCount += entries.length;
+    const completions = state.completionEvents.filter((item) => completionDate(item) === iso);
+    const executionLogs = state.taskExecutions.filter((item) => executionDate(item) === iso);
+    const minutes = executionLogs.reduce((sum, item) => sum + Number(item.actual_minutes || 0), 0);
+    weekActivityCount += completions.length + executionLogs.length;
     const cell = document.createElement("div");
-    cell.className = `day-cell${entries.length ? " has-entry" : ""}`;
-    cell.innerHTML = `<strong>${date.getMonth() + 1}.${date.getDate()}<br />(${weekday})</strong><span class="day-dot">${entries.length ? "✓" : ""}</span><small>${minutes ? `${minutes}분` : "-"}</small>`;
+    cell.className = `day-cell${completions.length ? " has-completion" : ""}${executionLogs.length ? " has-execution" : ""}`;
+    cell.innerHTML = `<strong>${date.getMonth() + 1}.${date.getDate()}<br />(${weekday})</strong><span class="day-dot" aria-label="${completions.length ? `완료 ${completions.length}건` : "완료 없음"}">${completions.length ? "✓" : ""}</span><small>${minutes ? `${minutes}분` : "-"}</small>`;
     weekGrid.append(cell);
   });
 
-  $("#week-empty").hidden = weekEntryCount > 0;
+  $("#week-empty").hidden = weekActivityCount > 0;
 }
 
 function renderTaskTagFilter() {
@@ -1201,6 +1206,7 @@ async function refreshCompletionEvents() {
   state.completionEvents = await supabaseRequest("task_completion_events", {
     query: `workspace_id=eq.${WORKSPACE_ID}&order=completed_at.desc`,
   });
+  renderWeek();
   renderCompletionSummary();
 }
 

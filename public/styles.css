@@ -174,7 +174,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .day-cell:last-child { border-right: 0; }
 .day-cell strong { font-size: .74rem; line-height: 1.35; text-align: center; }
 .day-dot { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: #eef0f1; font-size: .7rem; font-weight: 800; }
-.day-cell.has-entry .day-dot { background: var(--green); box-shadow: 0 0 0 5px rgba(36,154,114,.09); }
+.day-cell.has-completion .day-dot { background: var(--green); box-shadow: 0 0 0 5px rgba(36,154,114,.09); }
+.day-cell.has-execution small { color: var(--green-dark); font-weight: 800; }
 .day-cell small { color: var(--muted); font-size: .68rem; }
 .empty-action { width: 100%; min-height: 90px; display: flex; justify-content: center; align-items: center; gap: 16px; border: 1px dashed #b9ddd0; border-radius: 14px; background: linear-gradient(135deg, #f9fdfb, #eff9f5); }
 .empty-action[hidden] { display: none; }
