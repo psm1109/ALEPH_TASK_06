@@ -1,5 +1,6 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/+esm";
 import { encryptAuthCredentials } from "./auth-crypto.mjs";
+import { missedDaysToRecord } from "./missed-days.mjs";
 import {
   isTaskCompletedToday,
   millisecondsUntilNextSeoulDay,
@@ -9,7 +10,7 @@ import {
 } from "./daily-completion.mjs";
 
 const WORKSPACE_ID = "pds-main";
-const EXPORT_SCHEMA_VERSION = "2.2.0";
+const EXPORT_SCHEMA_VERSION = "2.3.0";
 const GENERIC_LOGIN_ERROR = "이메일 또는 비밀번호를 확인해 주세요.";
 
 const state = {
@@ -23,6 +24,7 @@ const state = {
   tasks: [],
   taskExecutions: [],
   completionEvents: [],
+  missedDays: [],
   editingTaskId: null,
   editingExecutionId: null,
   editingReflectionId: null,
@@ -140,6 +142,7 @@ function clearDiaryState() {
   state.tasks = [];
   state.taskExecutions = [];
   state.completionEvents = [];
+  state.missedDays = [];
   state.pendingTaskIds.clear();
 }
 
@@ -244,7 +247,7 @@ async function handleLogout() {
   }
 }
 
-async function supabaseRequest(table, { method = "GET", query = "", body } = {}) {
+async function supabaseRequest(table, { method = "GET", query = "", body, prefer } = {}) {
   if (!hasConfig()) throw new Error("Supabase 연결 정보가 필요합니다.");
   if (!state.session?.access_token) throw new Error("로그인이 필요합니다.");
 
@@ -254,7 +257,7 @@ async function supabaseRequest(table, { method = "GET", query = "", body } = {})
       apikey: state.config.publishableKey,
       Authorization: `Bearer ${state.session.access_token}`,
       "Content-Type": "application/json",
-      Prefer: ["POST", "PATCH"].includes(method) ? "return=representation" : "return=minimal",
+      Prefer: prefer || (["POST", "PATCH"].includes(method) ? "return=representation" : "return=minimal"),
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -274,6 +277,18 @@ async function supabaseRequest(table, { method = "GET", query = "", body } = {})
   return response.json();
 }
 
+async function loadAllRows(table, query) {
+  const rows = [];
+  const pageSize = 1000;
+  while (true) {
+    const page = await supabaseRequest(table, {
+      query: `${query}&limit=${pageSize}&offset=${rows.length}`,
+    });
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+  }
+}
+
 async function resetExpiredTaskCompletions(today) {
   const startOfToday = new Date(`${today}T00:00:00+09:00`).toISOString();
   await supabaseRequest("tasks", {
@@ -281,9 +296,7 @@ async function resetExpiredTaskCompletions(today) {
     query: `workspace_id=eq.${WORKSPACE_ID}&is_completed=eq.true&or=(completed_at.is.null,completed_at.lt.${encodeURIComponent(startOfToday)})`,
     body: { is_completed: false, completed_at: null, updated_at: new Date().toISOString() },
   });
-  return supabaseRequest("tasks", {
-    query: `workspace_id=eq.${WORKSPACE_ID}&order=created_at.asc`,
-  });
+  return loadAllRows("tasks", `workspace_id=eq.${WORKSPACE_ID}&order=created_at.asc,id.asc`);
 }
 
 async function connectAndLoad({ announce = true } = {}) {
@@ -300,20 +313,32 @@ async function connectAndLoad({ announce = true } = {}) {
       { query: `workspace_id=eq.${WORKSPACE_ID}&order=version.desc` },
     );
 
-    let [reflections, tasks, taskExecutions, completionEvents] = await Promise.all([
+    let [reflections, tasks, taskExecutions, completionEvents, missedDays] = await Promise.all([
       supabaseRequest("reflections", {
         query: `workspace_id=eq.${WORKSPACE_ID}&order=reflection_date.desc,created_at.desc`,
       }),
-      supabaseRequest("tasks", {
-        query: `workspace_id=eq.${WORKSPACE_ID}&order=created_at.asc`,
-      }),
+      loadAllRows("tasks", `workspace_id=eq.${WORKSPACE_ID}&order=created_at.asc,id.asc`),
       supabaseRequest("task_execution_logs", {
         query: `workspace_id=eq.${WORKSPACE_ID}&order=start_time.desc`,
       }),
-      supabaseRequest("task_completion_events", {
-        query: `workspace_id=eq.${WORKSPACE_ID}&order=completed_at.desc`,
-      }),
+      loadAllRows("task_completion_events", `workspace_id=eq.${WORKSPACE_ID}&order=completed_at.desc,id.desc`),
+      loadAllRows("task_missed_days", `workspace_id=eq.${WORKSPACE_ID}&order=missed_day.desc,id.desc`),
     ]);
+
+    const pendingMissedDays = missedDaysToRecord(
+      tasks, completionEvents, missedDays, toSeoulISODate(), WORKSPACE_ID,
+    );
+    if (pendingMissedDays.length) {
+      for (let index = 0; index < pendingMissedDays.length; index += 200) {
+        await supabaseRequest("task_missed_days", {
+          method: "POST",
+          query: "on_conflict=user_id,task_id,missed_day",
+          prefer: "resolution=ignore-duplicates,return=representation",
+          body: pendingMissedDays.slice(index, index + 200),
+        });
+      }
+      missedDays = await loadAllRows("task_missed_days", `workspace_id=eq.${WORKSPACE_ID}&order=missed_day.desc,id.desc`);
+    }
 
     let resetError = null;
     if (tasks.some((task) => taskNeedsDailyReset(task))) {
@@ -329,6 +354,7 @@ async function connectAndLoad({ announce = true } = {}) {
     state.tasks = tasks;
     state.taskExecutions = taskExecutions;
     state.completionEvents = completionEvents;
+    state.missedDays = missedDays;
     state.connected = true;
     setConnectionState("connected", "Supabase 저장됨");
     renderAll();
@@ -736,14 +762,12 @@ function formatSignedMinutes(value) {
 function getSeeSummary() {
   const tasks = [...state.tasks];
   const completedTasks = tasks.filter((task) => isTaskCompletedToday(task));
-  const overdueTasks = tasks.filter(isOverdue);
   const blockedTasks = tasks.filter((task) => blockerReasonsForTask(task.id).length > 0);
   const expectedMinutes = tasks.reduce((sum, task) => sum + Number(task.estimated_minutes || 0), 0);
   const actualMinutes = state.taskExecutions.reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0);
   return {
     tasks,
     completedTasks,
-    overdueTasks,
     blockedTasks,
     expectedMinutes,
     actualMinutes,
@@ -752,10 +776,36 @@ function getSeeSummary() {
 }
 
 function renderSeeEvidence(summary) {
+  if (state.seeEvidenceType === "overdue") {
+    $$("#see-metrics [data-see-evidence]").forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.seeEvidence === "overdue");
+    });
+    $("#see-evidence-title").textContent = "날짜별 지연 기록";
+    $("#see-evidence-description").textContent = "마감일 당일부터 서울 날짜가 끝날 때 완료하지 못한 할 일을 날짜마다 기록합니다.";
+    $("#see-evidence-count").textContent = `${state.missedDays.length}건`;
+    const groups = new Map();
+    for (const record of state.missedDays) {
+      if (!groups.has(record.missed_day)) groups.set(record.missed_day, []);
+      groups.get(record.missed_day).push(record);
+    }
+    $("#see-evidence-list").innerHTML = groups.size
+      ? [...groups.entries()].map(([day, records]) => `
+        <details class="execution-date-group" open>
+          <summary><span class="execution-date-heading"><strong>${formatExecutionDate(day)}</strong><small>${records.length}건 미완료</small></span></summary>
+          <div class="completion-date-list">${records.map((record) => `
+            <article class="see-evidence-item">
+              <div class="see-evidence-main"><strong>${escapeHTML(record.task_title)}</strong><span class="see-status overdue">미완료</span></div>
+              <div class="see-evidence-values"><span>마감 ${formatDate(record.due_date)}</span></div>
+            </article>
+          `).join("")}</div>
+        </details>
+      `).join("")
+      : '<div class="task-empty"><strong>지난 날짜의 미완료 기록이 없어요</strong></div>';
+    return;
+  }
   const definitions = {
     planned: { title: "계획 수의 근거 기록", description: "현재 계획에 연결된, 삭제되지 않은 모든 할 일입니다.", tasks: summary.tasks },
     completed: { title: "완료 수의 근거 기록", description: "지금 완료 체크가 유지된 할 일만 포함합니다.", tasks: summary.completedTasks },
-    overdue: { title: "지연 수의 근거 기록", description: "완료되지 않았고 마감일이 서울 기준 오늘보다 앞선 할 일입니다.", tasks: summary.overdueTasks },
     blocked: { title: "막힘 수의 근거 기록", description: "실행 기록에 실제 막힌 이유가 한 번이라도 남은 할 일입니다.", tasks: summary.blockedTasks },
     expected: { title: "예상 시간의 근거 기록", description: "각 할 일에 저장된 예상 시간의 합계입니다.", tasks: summary.tasks },
     actual: { title: "실제 시간의 근거 기록", description: "실행 기록이 있는 할 일별 실제 시간 합계입니다.", tasks: summary.tasks.filter((task) => actualMinutesForTask(task.id) > 0) },
@@ -859,7 +909,7 @@ function renderCompletionSummary() {
     : "첫 계획을 세우면 집계 기간이 표시됩니다.";
   $("#see-plan-count").textContent = summary.tasks.length;
   $("#see-completion-count").textContent = summary.completedTasks.length;
-  $("#see-overdue-count").textContent = summary.overdueTasks.length;
+  $("#see-overdue-count").textContent = state.missedDays.length;
   $("#see-blocked-count").textContent = summary.blockedTasks.length;
   $("#see-expected-time").textContent = formatMinutes(summary.expectedMinutes);
   $("#see-actual-time").textContent = formatMinutes(summary.actualMinutes);
@@ -972,6 +1022,7 @@ function createExportPayload() {
       tasks: state.tasks,
       task_execution_logs: state.taskExecutions,
       task_completion_events: state.completionEvents,
+      task_missed_days: state.missedDays,
       reflections: state.reflections,
     },
   };
@@ -995,7 +1046,7 @@ async function exportAllData() {
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
     showNotice(
-      `전체 자료를 JSON 파일로 내보냈습니다. 계획 ${payload.data.plan_versions.length}건 · 할 일 ${payload.data.tasks.length}건 · 실행 ${payload.data.task_execution_logs.length}건 · 회고 ${payload.data.reflections.length}건`,
+      `전체 자료를 JSON 파일로 내보냈습니다. 계획 ${payload.data.plan_versions.length}건 · 할 일 ${payload.data.tasks.length}건 · 실행 ${payload.data.task_execution_logs.length}건 · 날짜별 미완료 ${payload.data.task_missed_days.length}건 · 회고 ${payload.data.reflections.length}건`,
       "success",
       5200,
     );
@@ -1236,9 +1287,9 @@ async function deleteExecutionLog(executionLog) {
 }
 
 async function refreshCompletionEvents() {
-  state.completionEvents = await supabaseRequest("task_completion_events", {
-    query: `workspace_id=eq.${WORKSPACE_ID}&order=completed_at.desc`,
-  });
+  state.completionEvents = await loadAllRows(
+    "task_completion_events", `workspace_id=eq.${WORKSPACE_ID}&order=completed_at.desc,id.desc`,
+  );
   renderWeek();
   renderCompletionSummary();
 }
@@ -1281,6 +1332,7 @@ async function deleteTask(taskId) {
     state.tasks = state.tasks.filter((item) => String(item.id) !== String(taskId));
     state.taskExecutions = state.taskExecutions.filter((log) => String(log.task_id) !== String(taskId));
     state.completionEvents = state.completionEvents.filter((event) => String(event.task_id) !== String(taskId));
+    state.missedDays = state.missedDays.filter((event) => String(event.task_id) !== String(taskId));
     renderAll();
     showNotice("할 일을 삭제했습니다.", "success", 2600);
   } catch (error) {

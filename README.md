@@ -48,7 +48,8 @@
 
 ### See · 돌아보기
 
-- 계획 수, 완료 수, 지연 수, 막힘 수를 현재 자료에서 집계합니다.
+- 계획 수, 완료 수, 막힘 수는 현재 자료에서 집계합니다. 지연 수는 서울 날짜별 미완료 기록의 합계입니다. 같은 할 일이 여러 날 미완료였다면 날짜마다 1건씩 기록합니다.
+- 미완료 기록은 할 일을 만든 날과 마감일 중 늦은 날부터 어제까지 계산하며, 완료 기록이 있는 날짜는 제외합니다. 나중에 완료해도 지난 날짜의 미완료 기록은 유지됩니다.
 - 예상 시간, 실제 시간, `실제 − 예상` 차이를 표시합니다.
 - 집계 숫자를 선택하면 계산에 사용된 근거 기록을 확인할 수 있습니다.
 - 완료 내역은 날짜별로 묶고 날짜 합계와 할 일별 실행 시간 합계를 표시합니다.
@@ -58,6 +59,7 @@
 
 - 계획, 할 일, 실행 기록, 완료 기록, 회고는 Supabase에 저장됩니다.
 - 페이지를 새로고침하면 동일한 ID, 날짜, 값, 단위로 다시 불러옵니다.
+- 날짜별 미완료 기록은 DB에 저장되고 다음 접속 시 비어 있던 지난 날짜를 보충합니다. 할 일을 삭제하면 연결된 미완료 기록도 함께 삭제됩니다.
 - 화면 상단의 `전체 자료 내보내기`를 누르면 최신 서버 자료를 JSON 파일 하나로 내려받습니다.
 - 내보내기 파일에는 설정 URL, Publishable key, 인증 헤더가 포함되지 않습니다.
 - 날짜 표시와 오늘·지연 판정은 `Asia/Seoul`을 기준으로 합니다.
@@ -68,7 +70,7 @@
 
 1. Supabase 프로젝트의 SQL Editor에서 [`supabase/schema.sql`](supabase/schema.sql)을 실행합니다. 이 SQL은 RLS뿐 아니라 로그아웃된 세션을 Data API에서 즉시 거절하는 사전 요청 검사도 설정합니다.
    기존 카드 1 스키마가 이미 적용된 프로젝트에는 [`supabase/card3-session-revocation.sql`](supabase/card3-session-revocation.sql)만 실행해 카드 3 변경을 증분 적용할 수 있습니다.
-   기존 PDS Diary 데이터베이스에는 [`supabase/daily-completion.sql`](supabase/daily-completion.sql)을 추가로 실행합니다. 이전 버전의 이 SQL을 이미 실행했다면 새 내용을 다시 실행합니다. 오늘 체크를 풀었던 기존 완료 이벤트는 정리하고, 이전 날짜의 이벤트와 실행 기록은 보존합니다. 과거에 저장되지 못한 완료 날짜는 복구할 수 없습니다.
+   기존 PDS Diary 데이터베이스에는 [`supabase/daily-completion.sql`](supabase/daily-completion.sql)과 [`supabase/daily-missed-days.sql`](supabase/daily-missed-days.sql)을 추가로 실행합니다. 이전 버전의 완료 SQL을 이미 실행했다면 새 내용을 다시 실행합니다. 오늘 체크를 풀었던 기존 완료 이벤트는 정리하고, 이전 날짜의 이벤트와 실행 기록은 보존합니다. 과거에 저장되지 못한 완료 날짜는 복구할 수 없습니다.
 2. Supabase Authentication의 Email provider를 활성화합니다. 과제 확인 중 가입 직후 로그인해야 한다면 Confirm email을 끕니다.
 3. [`public/config.js`](public/config.js)에 Project URL과 `sb_publishable_...` 형식의 Publishable key를 설정합니다.
 4. 가입 화면에서 기존 자료를 소유할 본인 계정을 만듭니다.
@@ -122,6 +124,7 @@ python -m http.server 4173 --directory public
 │  ├─ styles.css       # 레이아웃, 반응형 UI, 커서 규칙
 │  ├─ auth-crypto.mjs  # 인증 Payload 하이브리드 암호화
 │  ├─ app.js           # 인증 상태, Plan·Do·See 상태와 Supabase REST 처리
+│  ├─ missed-days.mjs  # 지난 서울 날짜별 미완료 기록 생성
 │  └─ config.js        # Project URL과 Publishable key
 ├─ scripts/
 │  ├─ generate-auth-key.mjs # Git 제외 대상 RSA 비밀키 파일 생성
@@ -133,6 +136,7 @@ python -m http.server 4173 --directory public
 │  ├─ functions/diary-data/index.ts # 단건 소유자 확인 및 Data API 중계
 │  ├─ schema.sql       # 사용자 소유권 열, RLS, 날짜별 완료 기록
 │  ├─ daily-completion.sql # 기존 DB의 날짜별 완료 기록 전환
+│  ├─ daily-missed-days.sql # 기존 DB의 날짜별 미완료 기록 테이블 추가
 │  ├─ card3-session-revocation.sql # 기존 운영 DB용 즉시 세션 폐기 증분 SQL
 │  └─ card1-migrate-existing-data.sql # 기존 pds-main 자료 소유자 이관
 └─ contracts/

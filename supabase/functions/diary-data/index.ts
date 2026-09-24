@@ -14,6 +14,7 @@ const allowedTables = new Set([
   "tasks",
   "task_execution_logs",
   "task_completion_events",
+  "task_missed_days",
 ]);
 const allowedMethods = new Set(["GET", "POST", "PATCH", "DELETE"]);
 

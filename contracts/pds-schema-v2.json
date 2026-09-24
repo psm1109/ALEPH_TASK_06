@@ -1,7 +1,7 @@
 {
   "contract_id": "pds-schema-v2",
   "title": "PDS Diary 데이터 계약 v2",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "workspace": {
     "mode": "authenticated-per-user-workspace",
     "workspace_id": "pds-main",
@@ -13,7 +13,7 @@
     "timezone": "Asia/Seoul",
     "date": "YYYY-MM-DD 형식의 달력 날짜이며 시간대 변환을 하지 않는다.",
     "timestamp": "RFC 3339 형식으로 저장하고 화면 표시와 날짜별 집계에는 Asia/Seoul을 적용한다.",
-    "today": "지연 여부와 오늘 기록은 Asia/Seoul의 현재 날짜를 기준으로 판단한다. 당일 완료 기록은 현재 체크 상태를 따르고, 다음 서울 날짜가 되면 마지막 체크 상태를 보존한 뒤 현재 체크를 해제한다.",
+    "today": "오늘 완료 기록은 Asia/Seoul의 현재 날짜와 체크 상태를 따른다. 지난 날짜별 미완료 기록은 할 일을 만든 날과 마감일 중 늦은 날부터 어제까지, 해당 날짜에 완료 이벤트가 없는 경우에 저장한다. 다음 서울 날짜가 되면 마지막 완료 체크 상태를 보존한 뒤 현재 체크를 해제한다.",
     "duration": "실행 시간은 end_time과 start_time 차이를 반올림한 양의 정수 분으로 저장한다."
   },
   "units": {
@@ -90,6 +90,21 @@
         "completed_day": { "type": "date", "required": true, "timezone": "Asia/Seoul", "derived_from": "completed_at" }
       }
     },
+    "task_missed_days": {
+      "description": "지난 서울 날짜마다 완료하지 못한 할 일의 영구 기록. 이후 완료해도 보존되며 할 일을 삭제하면 함께 삭제된다.",
+      "primary_key": "id",
+      "unique": [["user_id", "task_id", "missed_day"]],
+      "fields": {
+        "id": { "type": "integer", "generated": true },
+        "user_id": { "type": "uuid", "required": true, "default": "auth.uid()" },
+        "workspace_id": { "type": "string", "required": true },
+        "task_id": { "type": "integer", "required": true },
+        "missed_day": { "type": "date", "required": true, "timezone": "Asia/Seoul" },
+        "task_title": { "type": "string", "required": true },
+        "due_date": { "type": "date", "required": true },
+        "created_at": { "type": "timestamp", "required": true, "generated": true }
+      }
+    },
     "reflections": {
       "description": "계획 버전에 연결되며 작성 후 수정하거나 삭제할 수 있는 돌아보기 기록",
       "primary_key": "id",
@@ -138,13 +153,20 @@
       "cardinality": "many-to-one",
       "on_delete": "cascade",
       "enforcement": "database"
+    },
+    {
+      "from": "task_missed_days.task_id",
+      "to": "tasks.id",
+      "cardinality": "many-to-one",
+      "on_delete": "cascade",
+      "enforcement": "database"
     }
   ],
   "export": {
     "format": "pds-diary-export",
     "media_type": "application/json",
     "top_level_fields": ["format", "schema_version", "exported_at", "workspace_id", "timezone", "units", "data"],
-    "data_collections": ["plan_versions", "tasks", "task_execution_logs", "task_completion_events", "reflections"],
+    "data_collections": ["plan_versions", "tasks", "task_execution_logs", "task_completion_events", "task_missed_days", "reflections"],
     "excludes": ["Supabase URL", "publishable key", "secret key", "authorization headers"]
   },
   "security": {
