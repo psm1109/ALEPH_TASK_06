@@ -55,6 +55,13 @@ export function completionEventsForPeriod(events, startDate, endDate) {
     });
 }
 
+export function removeTaskCompletionForDate(events, taskId, date) {
+  return events.filter((event) => (
+    String(event.task_id) !== String(taskId)
+    || (event.completed_day || toSeoulISODate(event.completed_at)) !== date
+  ));
+}
+
 export function weeklyDayRecord(events, tasks, executionLogs, date, today = toSeoulISODate()) {
   const completionCount = completedTaskIdsForDate(events, tasks, date, today).size;
   const entries = executionLogs.filter((log) => toSeoulISODate(log.start_time) === date);

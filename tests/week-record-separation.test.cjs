@@ -52,7 +52,7 @@ test("돌아보기 완료 수는 집계 기간의 날짜별 완료 기록을 합
 });
 
 test("오늘 체크를 풀면 즉시 사라지고 다음 날에는 남아 있던 기록만 보인다", async () => {
-  const { completedTaskIdsForDate } = await dailyCompletion();
+  const { completedTaskIdsForDate, removeTaskCompletionForDate } = await dailyCompletion();
   const task = { id: 7, is_completed: true, completed_at: "2026-09-23T14:00:00Z" };
   const firstEvent = { task_id: 7, completed_day: "2026-09-22", completed_at: "2026-09-22T14:00:00Z" };
   assert.deepEqual([...completedTaskIdsForDate([firstEvent], [task], "2026-09-23", "2026-09-23")], ["7"]);
@@ -61,6 +61,9 @@ test("오늘 체크를 풀면 즉시 사라지고 다음 날에는 남아 있던
   const unchecked = { ...task, is_completed: false, completed_at: null };
   assert.equal(completedTaskIdsForDate([firstEvent, sameDayEvent], [unchecked], "2026-09-23", "2026-09-23").size, 0);
   assert.deepEqual([...completedTaskIdsForDate([firstEvent], [unchecked], "2026-09-22", "2026-09-23")], ["7"]);
+  assert.deepEqual(removeTaskCompletionForDate(
+    [firstEvent, sameDayEvent], 7, "2026-09-23",
+  ), [firstEvent]);
 });
 
 test("주간 칸에서 완료 체크와 실행 시간을 독립적으로 계산한다", async () => {
@@ -88,6 +91,7 @@ test("완료 직후 주간 화면을 갱신하고 날짜 변경 시 저장 상�
   assert.match(app, /state\.tasks = state\.tasks\.map\([\s\S]*?renderWeek\(\);\s*renderTasks\(\);/);
   assert.match(app, /document\.addEventListener\("visibilitychange"/);
   assert.match(app, /await resetExpiredTaskCompletions\(toSeoulISODate\(\)\)/);
+  assert.match(app, /saved && !completed[\s\S]*?removeTaskCompletionForDate\([\s\S]*?renderCompletionSummary\(\)[\s\S]*?await refreshCompletionEvents\(\)/);
 });
 
 test("당일 해제는 이벤트를 제거하고 자정 후 초기화는 전날 이벤트를 보존한다", () => {

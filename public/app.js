@@ -5,6 +5,7 @@ import {
   completionEventsForPeriod,
   isTaskCompletedToday,
   millisecondsUntilNextSeoulDay,
+  removeTaskCompletionForDate,
   taskNeedsDailyReset,
   toSeoulISODate,
   weeklyDayRecord,
@@ -1436,6 +1437,13 @@ function bindEvents() {
         is_completed: completed,
         completed_at: completed ? new Date().toISOString() : null,
       }, completed ? "할 일을 완료로 변경했습니다." : "할 일을 다시 진행 중으로 되돌렸습니다.");
+      if (saved && !completed) {
+        state.completionEvents = removeTaskCompletionForDate(
+          state.completionEvents, task.id, toSeoulISODate(),
+        );
+        renderWeek();
+        renderCompletionSummary();
+      }
       if (saved) await refreshCompletionEvents();
     } catch (error) {
       showNotice(`완료 집계를 불러오지 못했습니다. ${error.message}`, "error");
