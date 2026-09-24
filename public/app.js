@@ -2,6 +2,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { encryptAuthCredentials } from "./auth-crypto.mjs";
 import { missedDaysToRecord } from "./missed-days.mjs";
 import {
+  blockerRecordsFromExecutions,
   completionRecordsFromExecutions,
   millisecondsUntilNextSeoulDay,
   taskHasExecutionForDate,
@@ -750,17 +751,6 @@ function actualMinutesForTask(taskId) {
     .reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0);
 }
 
-function isMeaningfulBlocker(value) {
-  const normalized = String(value || "").trim().toLocaleLowerCase("ko");
-  return Boolean(normalized) && !["없음", "없었음", "없어요", "none", "n/a", "-"].includes(normalized);
-}
-
-function blockerReasonsForTask(taskId) {
-  return [...new Set(state.taskExecutions
-    .filter((log) => String(log.task_id) === String(taskId) && isMeaningfulBlocker(log.blocker_reason))
-    .map((log) => String(log.blocker_reason).trim()))];
-}
-
 function formatSignedMinutes(value) {
   const minutes = Number(value || 0);
   if (!minutes) return "0분";
@@ -774,13 +764,20 @@ function getSeeSummary() {
   const periodCompletionEvents = plan
     ? completionRecordsFromExecutions(state.taskExecutions, plan.start_date, plan.end_date)
     : [];
-  const blockedTasks = tasks.filter((task) => blockerReasonsForTask(task.id).length > 0);
+  const taskIds = new Set(tasks.map((task) => String(task.id)));
+  const periodBlockerRecords = plan
+    ? blockerRecordsFromExecutions(state.taskExecutions, plan.start_date, plan.end_date)
+      .filter((record) => taskIds.has(String(record.task_id)))
+    : [];
+  const blockedTaskIds = new Set(periodBlockerRecords.map((record) => String(record.task_id)));
+  const blockedTasks = tasks.filter((task) => blockedTaskIds.has(String(task.id)));
   const expectedMinutes = tasks.reduce((sum, task) => sum + Number(task.estimated_minutes || 0), 0);
   const actualMinutes = state.taskExecutions.reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0);
   return {
     tasks,
     completedTasks,
     periodCompletionEvents,
+    periodBlockerRecords,
     blockedTasks,
     expectedMinutes,
     actualMinutes,
@@ -873,10 +870,38 @@ function renderSeeEvidence(summary) {
       : '<div class="task-empty"><strong>오늘까지 미완료 기록이 없어요</strong></div>';
     return;
   }
+  if (state.seeEvidenceType === "blocked") {
+    $$("#see-metrics [data-see-evidence]").forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.seeEvidence === "blocked");
+    });
+    $("#see-evidence-title").textContent = "막힘 수의 근거 기록";
+    $("#see-evidence-description").textContent = "집계 기간에 막힘 이유가 등록된 할 일을 날짜별로 표시합니다.";
+    $("#see-evidence-count").textContent = `${summary.blockedTasks.length}건`;
+    const groups = new Map();
+    for (const record of summary.periodBlockerRecords) {
+      if (!groups.has(record.blocked_day)) groups.set(record.blocked_day, []);
+      groups.get(record.blocked_day).push(record);
+    }
+    $("#see-evidence-list").innerHTML = groups.size
+      ? [...groups.entries()].map(([day, records]) => `
+        <details class="execution-date-group" open>
+          <summary><span class="execution-date-heading"><strong>${formatExecutionDate(day)}</strong><small>${records.length}개 할 일 막힘</small></span></summary>
+          <div class="completion-date-list">${records.map((record) => `
+            <article class="see-evidence-item">
+              <strong>${escapeHTML(taskTitle(record.task_id))}</strong>
+              <div class="see-evidence-reasons">${record.blocker_reasons.map((reason) => `
+                <p>${escapeHTML(reason)}</p>
+              `).join("")}</div>
+            </article>
+          `).join("")}</div>
+        </details>
+      `).join("")
+      : '<div class="task-empty"><strong>막힘 이유가 등록된 할 일이 없어요</strong></div>';
+    return;
+  }
   const currentPlanTasks = tasksForCurrentPlan(summary.tasks);
   const definitions = {
     planned: { title: "할 일 수의 근거 기록", description: "현재 계획에 연결된, 삭제되지 않은 할 일입니다.", tasks: currentPlanTasks },
-    blocked: { title: "막힘 수의 근거 기록", description: "실행 기록에 실제 막힌 이유가 한 번이라도 남은 할 일입니다.", tasks: summary.blockedTasks },
     expected: { title: "예상 시간의 근거 기록", description: "각 할 일에 저장된 예상 시간의 합계입니다.", tasks: summary.tasks },
     actual: { title: "실제 시간의 근거 기록", description: "실행 기록이 있는 할 일별 실제 시간 합계입니다.", tasks: summary.tasks.filter((task) => actualMinutesForTask(task.id) > 0) },
     gap: { title: "예상 대비 차이의 근거 기록", description: "할 일별 실제 시간에서 예상 시간을 뺀 값입니다.", tasks: summary.tasks },

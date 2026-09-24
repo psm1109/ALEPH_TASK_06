@@ -15,14 +15,18 @@ test("계획을 수정해도 기존 할 일을 유지해 할 일 수를 표시�
   assert.match(app, /\$\("#see-task-count"\)\.textContent = tasksForCurrentPlan\(summary\.tasks\)\.length/);
 });
 
-test("근거 기록의 각 할 일에는 제목만 표시한다", () => {
+test("일반 근거 기록은 제목만 표시하고 막힘 기록은 날짜와 이유를 표시한다", () => {
   const evidenceRenderer = app.slice(
     app.indexOf("function renderSeeEvidence"),
     app.indexOf("function renderCompletionHistory"),
   );
   assert.match(evidenceRenderer, /<article class="see-evidence-item"><strong>\$\{escapeHTML\(task\.title\)\}<\/strong><\/article>/);
   assert.match(evidenceRenderer, /<strong>\$\{escapeHTML\(record\.task_title\)\}<\/strong>/);
-  assert.doesNotMatch(evidenceRenderer, /see-evidence-values|see-status|막힘 이유/);
+  assert.doesNotMatch(evidenceRenderer, /see-evidence-values|see-status/);
+  assert.match(evidenceRenderer, /state\.seeEvidenceType === "blocked"/);
+  assert.match(evidenceRenderer, /record\.blocked_day/);
+  assert.match(evidenceRenderer, /record\.blocker_reasons\.map/);
+  assert.match(evidenceRenderer, /escapeHTML\(reason\)/);
 });
 
 test("완료 수는 집계 기간의 완료 기록을 세고 날짜별 펼치기로 표시한다", () => {

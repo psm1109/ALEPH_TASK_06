@@ -6,8 +6,8 @@
 
 - 저장소: `psm1109/ALEPH_TASK_06`
 - 작업 브랜치: `codex/card-1-auth`
-- 현재 기준 커밋: `75a537e`
-- 계획 수정 시 기존 할 일 유지 변경까지 커밋되어 있으며, 작업 트리에는 아래 지연 수 동적 재계산 변경이 아직 커밋되지 않은 상태로 남아 있습니다.
+- 현재 기준 커밋: `73b660a`
+- 지연 수 동적 재계산 변경까지 커밋되어 있으며, 작업 트리에는 아래 막힘 수 날짜별 근거 변경이 아직 커밋되지 않은 상태로 남아 있습니다.
 - 원격 추적 브랜치: `origin/codex/card-1-auth`
 - 고정된 최종 T06 조상 커밋: `bab809b`
 - 현재 브랜치에는 병합 커밋 `59530ab`과 카드 1의 과거 커밋 두 개가 함께 있습니다. 앞으로는 현재 브랜치의 최신 파일과 HEAD를 기준으로 작업합니다.
@@ -422,6 +422,38 @@ git diff --check
 확인하지 않은 항목:
 
 - 요청에 따라 로그인 후 실제 지연 수와 날짜별 펼치기 화면은 확인하지 않았습니다.
+
+### 2026-09-24 막힘 수 날짜별 근거 표시
+
+- 막힘 수는 현재 계획의 집계 기간 안에서 의미 있는 막힘 이유가 등록된 고유 할 일 수만 셉니다.
+- 빈 값과 `없음`, `없었음`, `없어요`, `none`, `n/a`, `-`는 막힘 이유에서 제외합니다.
+- 막힘 수의 근거 기록은 날짜별 펼치기로 표시하며, 각 날짜 안에서 할 일 제목과 작성된 막힘 이유를 함께 보여 줍니다.
+- 같은 날짜·같은 할 일의 실행 기록이 여러 개면 할 일은 한 항목으로 묶고 서로 다른 막힘 이유는 모두 표시합니다.
+- 다른 돌아보기 집계 항목과 데이터베이스 구조는 변경하지 않았습니다.
+
+관련 파일:
+
+- `public/daily-completion.mjs`
+- `public/app.js`
+- `public/index.html`
+- `public/styles.css`
+- `tests/week-record-separation.test.cjs`
+- `tests/see-task-evidence.test.cjs`
+- `README.md`
+- `PROJECT_CONTEXT.md`
+
+실행한 검사:
+
+- `node tests\week-record-separation.test.cjs` — 10개 통과
+- `node tests\see-task-evidence.test.cjs` — 3개 통과
+- `tests`의 `*.test.cjs`, `*.test.mjs` 전체 Node 검사 — 30개 통과, 실패 0개
+- `node --check public\app.js` — 통과
+- `node --check public\daily-completion.mjs` — 통과
+- `git diff --check` — 통과(LF→CRLF 안내만 표시)
+
+확인하지 않은 항목:
+
+- 요청에 따라 로그인 후 실제 막힘 수와 날짜별 이유 표시 화면은 확인하지 않았습니다.
 
 ## 아직 필요한 실제 확인
 

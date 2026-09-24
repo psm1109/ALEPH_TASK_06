@@ -55,6 +55,31 @@ export function completionRecordsFromExecutions(executionLogs, startDate = "", e
   });
 }
 
+export function isMeaningfulBlocker(value) {
+  const normalized = String(value || "").trim().toLocaleLowerCase("ko");
+  return Boolean(normalized) && !["없음", "없었음", "없어요", "none", "n/a", "-"].includes(normalized);
+}
+
+export function blockerRecordsFromExecutions(executionLogs, startDate = "", endDate = "") {
+  const records = new Map();
+  for (const log of executionLogs) {
+    const blockedDay = toSeoulISODate(log.start_time);
+    if (!blockedDay || !isMeaningfulBlocker(log.blocker_reason)) continue;
+    if (startDate && blockedDay < startDate) continue;
+    if (endDate && blockedDay > endDate) continue;
+    const key = `${String(log.task_id)}:${blockedDay}`;
+    const reason = String(log.blocker_reason).trim();
+    const record = records.get(key) || {
+      task_id: log.task_id,
+      blocked_day: blockedDay,
+      blocker_reasons: [],
+    };
+    if (!record.blocker_reasons.includes(reason)) record.blocker_reasons.push(reason);
+    records.set(key, record);
+  }
+  return [...records.values()].sort((a, b) => b.blocked_day.localeCompare(a.blocked_day));
+}
+
 export function weeklyDayRecord(executionLogs, date) {
   const entries = executionLogs.filter((log) => toSeoulISODate(log.start_time) === date);
   return {
