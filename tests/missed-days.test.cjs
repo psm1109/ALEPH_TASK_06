@@ -22,7 +22,7 @@ test("지난 날짜마다 미완료 기록을 만들고 완료한 날은 제외�
     .map((record) => record.missed_day), ["2026-09-23"]);
 });
 
-test("서울에서 만든 날과 마감일보다 이전이거나 오늘인 날짜는 기록하지 않는다", async () => {
+test("할 일을 만든 날부터 기록하고 마감일은 일일 미완료 판단을 늦추지 않는다", async () => {
   const { missedDaysToRecord } = await import(moduleUrl);
   const task = {
     id: 8, title: "실습", due_date: "2026-09-22",
@@ -30,7 +30,37 @@ test("서울에서 만든 날과 마감일보다 이전이거나 오늘인 날�
   };
   assert.deepEqual(missedDaysToRecord([task], [], [], "2026-09-25", "pds-main")
     .map((record) => record.missed_day), ["2026-09-23", "2026-09-24"]);
-  assert.deepEqual(missedDaysToRecord([{ ...task, due_date: "2026-09-26" }], [], [], "2026-09-25", "pds-main"), []);
+  assert.deepEqual(missedDaysToRecord([{ ...task, due_date: "2026-09-26" }], [], [], "2026-09-25", "pds-main")
+    .map((record) => record.missed_day), ["2026-09-23", "2026-09-24"]);
+});
+
+test("어제 할 일 다섯 개 중 세 개를 실행했다면 나머지 두 개를 기록한다", async () => {
+  const { missedDaysToRecord } = await import(moduleUrl);
+  const tasks = Array.from({ length: 5 }, (_, index) => ({
+    id: index + 1,
+    title: `할 일 ${index + 1}`,
+    due_date: "2026-10-01",
+    created_at: "2026-09-22T01:00:00Z",
+  }));
+  const completed = [1, 2, 3].map((taskId) => ({ task_id: taskId, completed_day: "2026-09-23" }));
+  const records = missedDaysToRecord(
+    tasks, completed, [], "2026-09-24", "pds-main",
+    { startDate: "2026-09-23", endDate: "2026-09-30" },
+  );
+  assert.deepEqual(records.map((record) => record.task_id), [4, 5]);
+  assert.ok(records.every((record) => record.missed_day === "2026-09-23"));
+});
+
+test("현재 계획의 집계 기간 밖 날짜는 기록하지 않는다", async () => {
+  const { missedDaysToRecord } = await import(moduleUrl);
+  const task = {
+    id: 8, title: "실습", due_date: "2026-09-30",
+    created_at: "2026-09-20T01:00:00Z",
+  };
+  assert.deepEqual(missedDaysToRecord(
+    [task], [], [], "2026-09-26", "pds-main",
+    { startDate: "2026-09-22", endDate: "2026-09-24" },
+  ).map((record) => record.missed_day), ["2026-09-22", "2026-09-23", "2026-09-24"]);
 });
 
 test("이미 기록된 날짜를 다시 저장하지 않고 이후 완료로 지난 미완료를 지우지 않는다", async () => {
@@ -51,7 +81,9 @@ test("집계 화면과 내보내기가 날짜별 미완료 기록을 사용한�
   const edge = fs.readFileSync(path.join(root, "supabase/functions/diary-data/index.ts"), "utf8");
   const contract = JSON.parse(fs.readFileSync(path.join(root, "contracts/pds-schema-v2.json"), "utf8"));
   assert.match(app, /missedDaysToRecord\(/);
-  assert.match(app, /state\.missedDays\.length/);
+  assert.match(app, /missedDaysForCurrentPlan\(summary\.tasks\)\.length/);
+  assert.match(app, /tasks\.filter\(\(task\) => Number\(task\.plan_version\) === Number\(currentVersion\.version\)\)/);
+  assert.match(app, /startDate: currentVersion\?\.start_date, endDate: currentVersion\?\.end_date/);
   assert.match(app, /task_missed_days: state\.missedDays/);
   assert.match(app, /on_conflict=user_id,task_id,missed_day/);
   assert.match(edge, /"task_missed_days"/);

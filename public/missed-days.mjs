@@ -6,7 +6,9 @@ function nextISODate(day) {
   return date.toISOString().slice(0, 10);
 }
 
-export function missedDaysToRecord(tasks, completionEvents, recordedDays, today, workspaceId) {
+export function missedDaysToRecord(
+  tasks, completionEvents, recordedDays, today, workspaceId, { startDate = "", endDate = "" } = {},
+) {
   const completed = new Set(completionEvents.map((event) =>
     `${event.task_id}:${event.completed_day || toSeoulISODate(event.completed_at)}`));
   const recorded = new Set(recordedDays.map((event) => `${event.task_id}:${event.missed_day}`));
@@ -14,10 +16,11 @@ export function missedDaysToRecord(tasks, completionEvents, recordedDays, today,
 
   for (const task of tasks) {
     const createdDay = toSeoulISODate(task.created_at);
-    const dueDay = String(task.due_date || "").slice(0, 10);
-    if (!createdDay || !dueDay) continue;
-    // A task cannot be missed before it exists or before its due date.
-    for (let day = createdDay > dueDay ? createdDay : dueDay; day < today; day = nextISODate(day)) {
+    if (!createdDay) continue;
+    // A task is evaluated on every finished day when it existed inside the
+    // current plan period. Its due date does not postpone daily completion.
+    const firstDay = startDate && startDate > createdDay ? startDate : createdDay;
+    for (let day = firstDay; day < today && (!endDate || day <= endDate); day = nextISODate(day)) {
       const key = `${task.id}:${day}`;
       if (completed.has(key) || recorded.has(key)) continue;
       pending.push({

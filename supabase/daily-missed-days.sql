@@ -1,7 +1,7 @@
 -- Run on an existing database before deploying the daily missed-day UI.
--- The app backfills each past Seoul day from task creation/due dates and
--- completion events. A row remains after a later completion of the task.
--- Days without an older saved completion event cannot be reconstructed reliably.
+-- The app backfills each finished Seoul day inside the current plan period
+-- from task creation dates and execution records. A row remains after a later
+-- execution of the task.
 begin;
 
 create table if not exists public.task_missed_days (

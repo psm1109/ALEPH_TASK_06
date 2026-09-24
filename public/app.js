@@ -324,8 +324,17 @@ async function connectAndLoad({ announce = true } = {}) {
       loadAllRows("task_missed_days", `workspace_id=eq.${WORKSPACE_ID}&order=missed_day.desc,id.desc`),
     ]);
 
+    const currentVersion = versions[0] || null;
+    const currentPlanTasks = currentVersion
+      ? tasks.filter((task) => Number(task.plan_version) === Number(currentVersion.version))
+      : [];
     const pendingMissedDays = missedDaysToRecord(
-      tasks, completionRecordsFromExecutions(taskExecutions), missedDays, toSeoulISODate(), WORKSPACE_ID,
+      currentPlanTasks,
+      completionRecordsFromExecutions(taskExecutions),
+      missedDays,
+      toSeoulISODate(),
+      WORKSPACE_ID,
+      { startDate: currentVersion?.start_date, endDate: currentVersion?.end_date },
     );
     if (pendingMissedDays.length) {
       for (let index = 0; index < pendingMissedDays.length; index += 200) {
@@ -803,6 +812,17 @@ function tasksForCurrentPlan(tasks = state.tasks) {
   return tasks.filter((task) => Number(task.plan_version) === Number(plan.version));
 }
 
+function missedDaysForCurrentPlan(tasks = state.tasks) {
+  const plan = currentPlan();
+  if (!plan) return [];
+  const taskIds = new Set(tasksForCurrentPlan(tasks).map((task) => String(task.id)));
+  return state.missedDays.filter((record) => (
+    taskIds.has(String(record.task_id))
+    && record.missed_day >= plan.start_date
+    && record.missed_day <= plan.end_date
+  ));
+}
+
 function renderSeeEvidence(summary) {
   if (state.seeEvidenceType === "completed") {
     $$("#see-metrics [data-see-evidence]").forEach((button) => {
@@ -833,10 +853,11 @@ function renderSeeEvidence(summary) {
       button.classList.toggle("is-active", button.dataset.seeEvidence === "overdue");
     });
     $("#see-evidence-title").textContent = "날짜별 지연 기록";
-    $("#see-evidence-description").textContent = "마감일 당일부터 서울 날짜가 끝날 때 완료하지 못한 할 일을 날짜마다 기록합니다.";
-    $("#see-evidence-count").textContent = `${state.missedDays.length}건`;
+    $("#see-evidence-description").textContent = "집계 기간의 지난 날짜마다 실행 기록이 없었던 할 일을 표시합니다.";
+    const periodMissedDays = missedDaysForCurrentPlan(summary.tasks);
+    $("#see-evidence-count").textContent = `${periodMissedDays.length}건`;
     const groups = new Map();
-    for (const record of state.missedDays) {
+    for (const record of periodMissedDays) {
       if (!groups.has(record.missed_day)) groups.set(record.missed_day, []);
       groups.get(record.missed_day).push(record);
     }
@@ -939,7 +960,7 @@ function renderCompletionSummary() {
     : "첫 계획을 세우면 집계 기간이 표시됩니다.";
   $("#see-task-count").textContent = tasksForCurrentPlan(summary.tasks).length;
   $("#see-completion-count").textContent = summary.periodCompletionEvents.length;
-  $("#see-overdue-count").textContent = state.missedDays.length;
+  $("#see-overdue-count").textContent = missedDaysForCurrentPlan(summary.tasks).length;
   $("#see-blocked-count").textContent = summary.blockedTasks.length;
   $("#see-expected-time").textContent = formatMinutes(summary.expectedMinutes);
   $("#see-actual-time").textContent = formatMinutes(summary.actualMinutes);
