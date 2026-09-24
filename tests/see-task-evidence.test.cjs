@@ -25,8 +25,8 @@ test("일반 근거 기록은 제목만 표시하고 막힘 기록은 날짜와 
   assert.doesNotMatch(evidenceRenderer, /see-evidence-values|see-status/);
   assert.match(evidenceRenderer, /state\.seeEvidenceType === "blocked"/);
   assert.match(evidenceRenderer, /record\.blocked_day/);
-  assert.match(evidenceRenderer, /record\.blocker_reasons\.map/);
-  assert.match(evidenceRenderer, /escapeHTML\(reason\)/);
+  assert.match(evidenceRenderer, /escapeHTML\(record\.blocker_reason\)/);
+  assert.match(app, /\$\("#see-blocked-count"\)\.textContent = summary\.periodBlockerRecords\.length/);
 });
 
 test("완료 수는 집계 기간의 완료 기록을 세고 날짜별 펼치기로 표시한다", () => {

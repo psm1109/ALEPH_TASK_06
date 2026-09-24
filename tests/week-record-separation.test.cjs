@@ -52,19 +52,31 @@ test("돌아보기 완료 수는 집계 기간의 실행 기록으로 만든 완
   assert.deepEqual(records.map((record) => record.task_id), [7, 7]);
 });
 
-test("막힘 이유가 있는 실행 기록을 날짜와 할 일별로 묶는다", async () => {
+test("같은 할 일의 막힘 이유도 실행 기록마다 각각 센다", async () => {
   const { blockerRecordsFromExecutions } = await dailyCompletion();
   const logs = [
-    { task_id: 7, start_time: "2026-09-22T01:00:00Z", blocker_reason: "자료를 찾지 못함" },
-    { task_id: 7, start_time: "2026-09-22T03:00:00Z", blocker_reason: "환경 설정 오류" },
-    { task_id: 7, start_time: "2026-09-23T01:00:00Z", blocker_reason: "없음" },
-    { task_id: 8, start_time: "2026-09-23T03:00:00Z", blocker_reason: "로그인 실패" },
-    { task_id: 9, start_time: "2026-09-24T01:00:00Z", blocker_reason: "기간 밖 기록" },
+    { id: 1, task_id: 7, start_time: "2026-09-22T01:00:00Z", blocker_reason: "자료를 찾지 못함" },
+    { id: 2, task_id: 7, start_time: "2026-09-22T03:00:00Z", blocker_reason: "환경 설정 오류" },
+    { id: 3, task_id: 7, start_time: "2026-09-23T01:00:00Z", blocker_reason: "없음" },
+    { id: 4, task_id: 8, start_time: "2026-09-23T03:00:00Z", blocker_reason: "로그인 실패" },
+    { id: 5, task_id: 9, start_time: "2026-09-24T01:00:00Z", blocker_reason: "기간 밖 기록" },
   ];
   assert.deepEqual(blockerRecordsFromExecutions(logs, "2026-09-22", "2026-09-23"), [
-    { task_id: 8, blocked_day: "2026-09-23", blocker_reasons: ["로그인 실패"] },
-    { task_id: 7, blocked_day: "2026-09-22", blocker_reasons: ["자료를 찾지 못함", "환경 설정 오류"] },
+    { id: 4, task_id: 8, blocked_day: "2026-09-23", blocked_at: "2026-09-23T03:00:00Z", blocker_reason: "로그인 실패" },
+    { id: 2, task_id: 7, blocked_day: "2026-09-22", blocked_at: "2026-09-22T03:00:00Z", blocker_reason: "환경 설정 오류" },
+    { id: 1, task_id: 7, blocked_day: "2026-09-22", blocked_at: "2026-09-22T01:00:00Z", blocker_reason: "자료를 찾지 못함" },
   ]);
+});
+
+test("한 할 일의 막힘 기록이 네 건이면 막힘 수도 네 건이다", async () => {
+  const { blockerRecordsFromExecutions } = await dailyCompletion();
+  const logs = Array.from({ length: 4 }, (_, index) => ({
+    id: index + 1,
+    task_id: 7,
+    start_time: `2026-09-2${index + 1}T01:00:00Z`,
+    blocker_reason: `막힘 이유 ${index + 1}`,
+  }));
+  assert.equal(blockerRecordsFromExecutions(logs, "2026-09-21", "2026-09-24").length, 4);
 });
 
 test("실행 기록이 있는 날짜에만 해당 할 일이 자동 완료된다", async () => {

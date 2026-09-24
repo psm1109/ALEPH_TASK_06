@@ -769,8 +769,6 @@ function getSeeSummary() {
     ? blockerRecordsFromExecutions(state.taskExecutions, plan.start_date, plan.end_date)
       .filter((record) => taskIds.has(String(record.task_id)))
     : [];
-  const blockedTaskIds = new Set(periodBlockerRecords.map((record) => String(record.task_id)));
-  const blockedTasks = tasks.filter((task) => blockedTaskIds.has(String(task.id)));
   const expectedMinutes = tasks.reduce((sum, task) => sum + Number(task.estimated_minutes || 0), 0);
   const actualMinutes = state.taskExecutions.reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0);
   return {
@@ -778,7 +776,6 @@ function getSeeSummary() {
     completedTasks,
     periodCompletionEvents,
     periodBlockerRecords,
-    blockedTasks,
     expectedMinutes,
     actualMinutes,
     gapMinutes: actualMinutes - expectedMinutes,
@@ -875,8 +872,8 @@ function renderSeeEvidence(summary) {
       button.classList.toggle("is-active", button.dataset.seeEvidence === "blocked");
     });
     $("#see-evidence-title").textContent = "막힘 수의 근거 기록";
-    $("#see-evidence-description").textContent = "집계 기간에 막힘 이유가 등록된 할 일을 날짜별로 표시합니다.";
-    $("#see-evidence-count").textContent = `${summary.blockedTasks.length}건`;
+    $("#see-evidence-description").textContent = "집계 기간에 작성한 막힘 기록을 날짜별로 표시합니다.";
+    $("#see-evidence-count").textContent = `${summary.periodBlockerRecords.length}건`;
     const groups = new Map();
     for (const record of summary.periodBlockerRecords) {
       if (!groups.has(record.blocked_day)) groups.set(record.blocked_day, []);
@@ -885,13 +882,11 @@ function renderSeeEvidence(summary) {
     $("#see-evidence-list").innerHTML = groups.size
       ? [...groups.entries()].map(([day, records]) => `
         <details class="execution-date-group" open>
-          <summary><span class="execution-date-heading"><strong>${formatExecutionDate(day)}</strong><small>${records.length}개 할 일 막힘</small></span></summary>
+          <summary><span class="execution-date-heading"><strong>${formatExecutionDate(day)}</strong><small>${records.length}건 막힘</small></span></summary>
           <div class="completion-date-list">${records.map((record) => `
             <article class="see-evidence-item">
               <strong>${escapeHTML(taskTitle(record.task_id))}</strong>
-              <div class="see-evidence-reasons">${record.blocker_reasons.map((reason) => `
-                <p>${escapeHTML(reason)}</p>
-              `).join("")}</div>
+              <div class="see-evidence-reasons"><p>${escapeHTML(record.blocker_reason)}</p></div>
             </article>
           `).join("")}</div>
         </details>
@@ -984,7 +979,7 @@ function renderCompletionSummary() {
   $("#see-task-count").textContent = tasksForCurrentPlan(summary.tasks).length;
   $("#see-completion-count").textContent = summary.periodCompletionEvents.length;
   $("#see-overdue-count").textContent = missedDaysForCurrentPlan(summary.tasks).length;
-  $("#see-blocked-count").textContent = summary.blockedTasks.length;
+  $("#see-blocked-count").textContent = summary.periodBlockerRecords.length;
   $("#see-expected-time").textContent = formatMinutes(summary.expectedMinutes);
   $("#see-actual-time").textContent = formatMinutes(summary.actualMinutes);
   $("#see-time-gap").textContent = formatSignedMinutes(summary.gapMinutes);
