@@ -1,7 +1,7 @@
 {
   "contract_id": "pds-schema-v2",
   "title": "PDS Diary 데이터 계약 v2",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "workspace": {
     "mode": "authenticated-per-user-workspace",
     "workspace_id": "pds-main",
@@ -13,7 +13,7 @@
     "timezone": "Asia/Seoul",
     "date": "YYYY-MM-DD 형식의 달력 날짜이며 시간대 변환을 하지 않는다.",
     "timestamp": "RFC 3339 형식으로 저장하고 화면 표시와 날짜별 집계에는 Asia/Seoul을 적용한다.",
-    "today": "지연 여부와 오늘 기록은 Asia/Seoul의 현재 날짜를 기준으로 판단한다.",
+    "today": "지연 여부와 오늘 기록은 Asia/Seoul의 현재 날짜를 기준으로 판단한다. 할 일 완료 체크는 다음 서울 날짜에 자동 해제하며 날짜별 완료 이력은 보존한다.",
     "duration": "실행 시간은 end_time과 start_time 차이를 반올림한 양의 정수 분으로 저장한다."
   },
   "units": {
@@ -78,15 +78,16 @@
       }
     },
     "task_completion_events": {
-      "description": "할 일별로 한 번만 생기는 최초 완료 기록",
+      "description": "할 일별 서울 날짜마다 한 번씩 생기는 완료 기록",
       "primary_key": "id",
-      "unique": [["user_id", "task_id"]],
+      "unique": [["user_id", "task_id", "completed_day"]],
       "fields": {
         "id": { "type": "integer", "generated": true },
         "user_id": { "type": "uuid", "required": true, "default": "auth.uid()" },
         "workspace_id": { "type": "string", "required": true },
         "task_id": { "type": "integer", "required": true },
-        "completed_at": { "type": "timestamp", "required": true, "generated": true }
+        "completed_at": { "type": "timestamp", "required": true, "generated": true },
+        "completed_day": { "type": "date", "required": true, "timezone": "Asia/Seoul", "derived_from": "completed_at" }
       }
     },
     "reflections": {
@@ -134,7 +135,7 @@
     {
       "from": "task_completion_events.task_id",
       "to": "tasks.id",
-      "cardinality": "one-to-one",
+      "cardinality": "many-to-one",
       "on_delete": "cascade",
       "enforcement": "database"
     }

@@ -1,8 +1,15 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/+esm";
 import { encryptAuthCredentials } from "./auth-crypto.mjs";
+import {
+  isTaskCompletedToday,
+  millisecondsUntilNextSeoulDay,
+  taskNeedsDailyReset,
+  toSeoulISODate,
+  weeklyDayRecord,
+} from "./daily-completion.mjs";
 
 const WORKSPACE_ID = "pds-main";
-const EXPORT_SCHEMA_VERSION = "2.0.0";
+const EXPORT_SCHEMA_VERSION = "2.1.0";
 const GENERIC_LOGIN_ERROR = "이메일 또는 비밀번호를 확인해 주세요.";
 
 const state = {
@@ -267,6 +274,18 @@ async function supabaseRequest(table, { method = "GET", query = "", body } = {})
   return response.json();
 }
 
+async function resetExpiredTaskCompletions(today) {
+  const startOfToday = new Date(`${today}T00:00:00+09:00`).toISOString();
+  await supabaseRequest("tasks", {
+    method: "PATCH",
+    query: `workspace_id=eq.${WORKSPACE_ID}&is_completed=eq.true&or=(completed_at.is.null,completed_at.lt.${encodeURIComponent(startOfToday)})`,
+    body: { is_completed: false, completed_at: null, updated_at: new Date().toISOString() },
+  });
+  return supabaseRequest("tasks", {
+    query: `workspace_id=eq.${WORKSPACE_ID}&order=created_at.asc`,
+  });
+}
+
 async function connectAndLoad({ announce = true } = {}) {
   if (!hasConfig()) {
     setConnectionState("error", "Supabase 설정 누락");
@@ -281,7 +300,7 @@ async function connectAndLoad({ announce = true } = {}) {
       { query: `workspace_id=eq.${WORKSPACE_ID}&order=version.desc` },
     );
 
-    const [reflections, tasks, taskExecutions, completionEvents] = await Promise.all([
+    let [reflections, tasks, taskExecutions, completionEvents] = await Promise.all([
       supabaseRequest("reflections", {
         query: `workspace_id=eq.${WORKSPACE_ID}&order=reflection_date.desc,created_at.desc`,
       }),
@@ -296,6 +315,15 @@ async function connectAndLoad({ announce = true } = {}) {
       }),
     ]);
 
+    let resetError = null;
+    if (tasks.some((task) => taskNeedsDailyReset(task))) {
+      try {
+        tasks = await resetExpiredTaskCompletions(toSeoulISODate());
+      } catch (error) {
+        resetError = error;
+      }
+    }
+
     state.versions = versions.sort((a, b) => b.version - a.version);
     state.reflections = reflections;
     state.tasks = tasks;
@@ -303,8 +331,9 @@ async function connectAndLoad({ announce = true } = {}) {
     state.completionEvents = completionEvents;
     state.connected = true;
     setConnectionState("connected", "Supabase 저장됨");
-    if (announce) showNotice("Supabase에서 최신 기록을 불러왔습니다.", "success", 2800);
     renderAll();
+    if (resetError) showNotice(`지난날의 완료 체크를 저장소에서 초기화하지 못했습니다. ${resetError.message}`, "error");
+    else if (announce) showNotice("Supabase에서 최신 기록을 불러왔습니다.", "success", 2800);
     return true;
   } catch (error) {
     state.connected = false;
@@ -356,25 +385,8 @@ function toISODate(date) {
   return `${year}-${month}-${day}`;
 }
 
-function toSeoulISODate(value = new Date()) {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${values.year}-${values.month}-${values.day}`;
-}
-
 function executionDate(executionLog) {
   return toSeoulISODate(executionLog.start_time);
-}
-
-function completionDate(completionEvent) {
-  return toSeoulISODate(completionEvent.completed_at);
 }
 
 function formatDate(value, separator = ".") {
@@ -495,13 +507,13 @@ function renderWeek() {
     const date = new Date(monday);
     date.setDate(monday.getDate() + index);
     const iso = toISODate(date);
-    const completions = state.completionEvents.filter((item) => completionDate(item) === iso);
-    const executionLogs = state.taskExecutions.filter((item) => executionDate(item) === iso);
-    const minutes = executionLogs.reduce((sum, item) => sum + Number(item.actual_minutes || 0), 0);
-    weekActivityCount += completions.length + executionLogs.length;
+    const { completionCount, executionCount, minutes } = weeklyDayRecord(
+      state.completionEvents, state.tasks, state.taskExecutions, iso,
+    );
+    weekActivityCount += completionCount + executionCount;
     const cell = document.createElement("div");
-    cell.className = `day-cell${completions.length ? " has-completion" : ""}${executionLogs.length ? " has-execution" : ""}`;
-    cell.innerHTML = `<strong>${date.getMonth() + 1}.${date.getDate()}<br />(${weekday})</strong><span class="day-dot" aria-label="${completions.length ? `완료 ${completions.length}건` : "완료 없음"}">${completions.length ? "✓" : ""}</span><small>${minutes ? `${minutes}분` : "-"}</small>`;
+    cell.className = `day-cell${completionCount ? " has-completion" : ""}${executionCount ? " has-execution" : ""}`;
+    cell.innerHTML = `<strong>${date.getMonth() + 1}.${date.getDate()}<br />(${weekday})</strong><span class="day-dot" aria-label="${completionCount ? `완료 ${completionCount}건` : "완료 없음"}">${completionCount ? "✓" : ""}</span><small>${minutes ? `${minutes}분` : "-"}</small>`;
     weekGrid.append(cell);
   });
 
@@ -539,8 +551,8 @@ function filteredAndSortedTasks() {
     .filter((task) => {
       const searchable = `${task.title} ${(task.tags || []).join(" ")}`.toLocaleLowerCase("ko");
       if (search && !searchable.includes(search)) return false;
-      if (query.status === "active" && task.is_completed) return false;
-      if (query.status === "completed" && !task.is_completed) return false;
+      if (query.status === "active" && isTaskCompletedToday(task)) return false;
+      if (query.status === "completed" && !isTaskCompletedToday(task)) return false;
       if (query.priority !== "all" && task.priority !== query.priority) return false;
       if (query.tag !== "all" && !(task.tags || []).includes(query.tag)) return false;
       return true;
@@ -560,13 +572,13 @@ function formatMinutes(value) {
 }
 
 function isOverdue(task) {
-  return !task.is_completed && String(task.due_date).slice(0, 10) < toSeoulISODate();
+  return !isTaskCompletedToday(task) && String(task.due_date).slice(0, 10) < toSeoulISODate();
 }
 
 function renderTasks() {
   renderTaskTagFilter();
   const tasks = filteredAndSortedTasks();
-  const completedCount = state.tasks.filter((task) => task.is_completed).length;
+  const completedCount = state.tasks.filter((task) => isTaskCompletedToday(task)).length;
   const sortLabels = {
     due_asc: "마감 임박순",
     priority_desc: "우선순위 높은 순",
@@ -593,6 +605,7 @@ function renderTasks() {
 
   list.innerHTML = tasks.map((task) => {
     const taskId = escapeHTML(task.id);
+    const completed = isTaskCompletedToday(task);
     const tags = (task.tags || []).map((tag) => `<span class="task-tag">#${escapeHTML(tag)}</span>`).join("");
     const overdue = isOverdue(task);
     const today = toSeoulISODate();
@@ -617,14 +630,14 @@ function renderTasks() {
       </details>
     ` : "";
     return `
-      <article class="task-item${task.is_completed ? " is-completed" : ""}">
+      <article class="task-item${completed ? " is-completed" : ""}">
         <input
           class="task-check"
           type="checkbox"
           data-action="toggle-task"
           data-task-id="${taskId}"
-          aria-label="${task.is_completed ? "진행 중으로 되돌리기" : "완료로 변경"}: ${escapeHTML(task.title)}"
-          ${task.is_completed ? "checked" : ""}
+          aria-label="${completed ? "진행 중으로 되돌리기" : "완료로 변경"}: ${escapeHTML(task.title)}"
+          ${completed ? "checked" : ""}
           ${state.pendingTaskIds.has(String(task.id)) ? "disabled" : ""}
         />
         <div class="task-main">
@@ -722,7 +735,7 @@ function formatSignedMinutes(value) {
 
 function getSeeSummary() {
   const tasks = [...state.tasks];
-  const completedTasks = tasks.filter((task) => task.is_completed);
+  const completedTasks = tasks.filter((task) => isTaskCompletedToday(task));
   const overdueTasks = tasks.filter(isOverdue);
   const blockedTasks = tasks.filter((task) => blockerReasonsForTask(task.id).length > 0);
   const expectedMinutes = tasks.reduce((sum, task) => sum + Number(task.estimated_minutes || 0), 0);
@@ -766,11 +779,12 @@ function renderSeeEvidence(summary) {
     const actualMinutes = actualMinutesForTask(task.id);
     const gapMinutes = actualMinutes - Number(task.estimated_minutes || 0);
     const blockers = blockerReasonsForTask(task.id);
+    const completed = isTaskCompletedToday(task);
     return `
       <article class="see-evidence-item">
         <div class="see-evidence-main">
           <strong>${escapeHTML(task.title)}</strong>
-          <span class="see-status ${task.is_completed ? "completed" : isOverdue(task) ? "overdue" : "active"}">${task.is_completed ? "완료" : isOverdue(task) ? "지연" : "진행 중"}</span>
+          <span class="see-status ${completed ? "completed" : isOverdue(task) ? "overdue" : "active"}">${completed ? "완료" : isOverdue(task) ? "지연" : "진행 중"}</span>
         </div>
         <div class="see-evidence-values">
           <span>마감 ${formatDate(task.due_date)}</span>
@@ -1004,6 +1018,25 @@ function renderAll() {
   renderFullHistory();
 }
 
+let renderedSeoulDay = toSeoulISODate();
+let dayRolloverTimer;
+
+async function refreshAfterDayRollover() {
+  const today = toSeoulISODate();
+  if (today === renderedSeoulDay) return;
+  renderedSeoulDay = today;
+  renderAll();
+  if (state.connected) await connectAndLoad({ announce: false });
+}
+
+function scheduleDayRollover() {
+  window.clearTimeout(dayRolloverTimer);
+  dayRolloverTimer = window.setTimeout(() => {
+    void refreshAfterDayRollover();
+    scheduleDayRollover();
+  }, millisecondsUntilNextSeoulDay());
+}
+
 function switchView(view) {
   $$(".view").forEach((section) => section.classList.toggle("is-active", section.id === `${view}-view`));
   $$(".nav-item").forEach((button) => button.classList.remove("is-active"));
@@ -1220,6 +1253,7 @@ async function updateTask(taskId, changes, successMessage) {
     });
     if (!saved) throw new Error("변경된 할 일을 찾지 못했습니다.");
     state.tasks = state.tasks.map((task) => String(task.id) === String(taskId) ? saved : task);
+    renderWeek();
     renderTasks();
     renderCompletionSummary();
     showNotice(successMessage, "success", 2600);
@@ -1325,9 +1359,9 @@ function bindEvents() {
       renderTasks();
       return;
     }
+    const completed = checkbox.checked;
     state.pendingTaskIds.add(pendingId);
     renderTasks();
-    const completed = checkbox.checked;
     try {
       const saved = await updateTask(task.id, {
         is_completed: completed,
@@ -1583,6 +1617,10 @@ function bindEvents() {
 
 async function initialize() {
   bindEvents();
+  scheduleDayRollover();
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) void refreshAfterDayRollover();
+  });
   renderAll();
   const route = location.hash.slice(1);
   if (["plan", "do", "see", "history"].includes(route)) switchView(route);

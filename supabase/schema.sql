@@ -100,13 +100,21 @@ create table if not exists public.task_completion_events (
   user_id uuid default auth.uid() references auth.users(id) on delete cascade,
   workspace_id text not null,
   task_id bigint not null references public.tasks(id) on delete cascade,
-  completed_at timestamptz not null default now()
+  completed_at timestamptz not null default now(),
+  completed_day date not null
 );
 
 alter table public.task_completion_events
   add column if not exists user_id uuid references auth.users(id) on delete cascade;
 alter table public.task_completion_events
   alter column user_id set default auth.uid();
+alter table public.task_completion_events
+  add column if not exists completed_day date;
+update public.task_completion_events
+set completed_day = (completed_at at time zone 'Asia/Seoul')::date
+where completed_day is null;
+alter table public.task_completion_events
+  alter column completed_day set not null;
 
 -- Replace the former single-workspace uniqueness rules with per-user rules.
 alter table public.plan_versions
@@ -120,8 +128,9 @@ create unique index if not exists plan_versions_owner_workspace_version_uidx
   on public.plan_versions (user_id, workspace_id, version);
 create unique index if not exists tasks_owner_workspace_seed_uidx
   on public.tasks (user_id, workspace_id, seed_key);
-create unique index if not exists task_completion_events_owner_task_uidx
-  on public.task_completion_events (user_id, task_id);
+drop index if exists public.task_completion_events_owner_task_uidx;
+create unique index if not exists task_completion_events_owner_task_day_uidx
+  on public.task_completion_events (user_id, task_id, completed_day);
 
 create index if not exists plan_versions_owner_workspace_version_idx
   on public.plan_versions (user_id, workspace_id, version desc);
@@ -301,34 +310,45 @@ grant usage, select on sequence public.tasks_id_seq to authenticated;
 grant usage, select on sequence public.task_execution_logs_id_seq to authenticated;
 grant usage, select on sequence public.task_completion_events_id_seq to authenticated;
 
-create or replace function public.record_task_completion_once()
+create or replace function public.record_task_completion_for_day()
 returns trigger
 language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  completion_time timestamptz;
+  completion_day date;
 begin
-  if new.is_completed = true and old.is_completed = false then
-    insert into public.task_completion_events (user_id, workspace_id, task_id, completed_at)
-    values (new.user_id, new.workspace_id, new.id, coalesce(new.completed_at, now()))
-    on conflict (user_id, task_id) do nothing;
+  completion_time := coalesce(new.completed_at, now());
+  completion_day := (completion_time at time zone 'Asia/Seoul')::date;
+  if new.is_completed = true and (
+    old.is_completed = false or
+    (old.completed_at at time zone 'Asia/Seoul')::date is distinct from completion_day
+  ) then
+    insert into public.task_completion_events (user_id, workspace_id, task_id, completed_at, completed_day)
+    values (new.user_id, new.workspace_id, new.id, completion_time, completion_day)
+    on conflict (user_id, task_id, completed_day) do nothing;
   end if;
   return new;
 end;
 $$;
 
-revoke all on function public.record_task_completion_once() from public;
+revoke all on function public.record_task_completion_for_day() from public;
 
 drop trigger if exists tasks_record_completion_once on public.tasks;
-create trigger tasks_record_completion_once
-after update of is_completed on public.tasks
-for each row execute function public.record_task_completion_once();
+drop trigger if exists tasks_record_completion_for_day on public.tasks;
+drop function if exists public.record_task_completion_once();
+create trigger tasks_record_completion_for_day
+after update of is_completed, completed_at on public.tasks
+for each row execute function public.record_task_completion_for_day();
 
-insert into public.task_completion_events (user_id, workspace_id, task_id, completed_at)
-select user_id, workspace_id, id, coalesce(completed_at, updated_at, now())
+insert into public.task_completion_events (user_id, workspace_id, task_id, completed_at, completed_day)
+select user_id, workspace_id, id, coalesce(completed_at, updated_at, now()),
+  (coalesce(completed_at, updated_at, now()) at time zone 'Asia/Seoul')::date
 from public.tasks
 where is_completed = true
   and user_id is not null
-on conflict (user_id, task_id) do nothing;
+on conflict (user_id, task_id, completed_day) do nothing;
 
 -- plan_versions are append-only. Other diary records can be updated or deleted by their owner.
