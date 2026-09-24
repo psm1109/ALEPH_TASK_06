@@ -325,9 +325,7 @@ async function connectAndLoad({ announce = true } = {}) {
     ]);
 
     const currentVersion = versions[0] || null;
-    const currentPlanTasks = currentVersion
-      ? tasks.filter((task) => Number(task.plan_version) === Number(currentVersion.version))
-      : [];
+    const currentPlanTasks = currentVersion ? tasks : [];
     const pendingMissedDays = missedDaysToRecord(
       currentPlanTasks,
       completionRecordsFromExecutions(taskExecutions),
@@ -807,9 +805,7 @@ function latestExecutionForTaskOnDate(taskId, date) {
 }
 
 function tasksForCurrentPlan(tasks = state.tasks) {
-  const plan = currentPlan();
-  if (!plan) return [];
-  return tasks.filter((task) => Number(task.plan_version) === Number(plan.version));
+  return currentPlan() ? [...tasks] : [];
 }
 
 function missedDaysForCurrentPlan(tasks = state.tasks) {

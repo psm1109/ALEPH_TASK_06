@@ -7,10 +7,11 @@ const root = path.resolve(__dirname, "..");
 const html = fs.readFileSync(path.join(root, "public/index.html"), "utf8");
 const app = fs.readFileSync(path.join(root, "public/app.js"), "utf8");
 
-test("돌아보기의 첫 집계는 현재 계획에 연결된 할 일 수를 표시한다", () => {
+test("계획을 수정해도 기존 할 일을 유지해 할 일 수를 표시한다", () => {
   assert.match(html, /data-see-evidence="planned"><span>할 일 수<\/span><strong id="see-task-count">/);
   assert.doesNotMatch(html, /id="see-plan-count"/);
-  assert.match(app, /function tasksForCurrentPlan\(tasks = state\.tasks\)[\s\S]*?task\.plan_version\) === Number\(plan\.version\)/);
+  assert.match(app, /function tasksForCurrentPlan\(tasks = state\.tasks\) \{\s*return currentPlan\(\) \? \[\.\.\.tasks\] : \[\];\s*\}/);
+  assert.doesNotMatch(app, /tasksForCurrentPlan[\s\S]{0,180}task\.plan_version/);
   assert.match(app, /\$\("#see-task-count"\)\.textContent = tasksForCurrentPlan\(summary\.tasks\)\.length/);
 });
 

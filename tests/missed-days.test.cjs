@@ -82,7 +82,7 @@ test("집계 화면과 내보내기가 날짜별 미완료 기록을 사용한�
   const contract = JSON.parse(fs.readFileSync(path.join(root, "contracts/pds-schema-v2.json"), "utf8"));
   assert.match(app, /missedDaysToRecord\(/);
   assert.match(app, /missedDaysForCurrentPlan\(summary\.tasks\)\.length/);
-  assert.match(app, /tasks\.filter\(\(task\) => Number\(task\.plan_version\) === Number\(currentVersion\.version\)\)/);
+  assert.match(app, /const currentPlanTasks = currentVersion \? tasks : \[\]/);
   assert.match(app, /startDate: currentVersion\?\.start_date, endDate: currentVersion\?\.end_date/);
   assert.match(app, /task_missed_days: state\.missedDays/);
   assert.match(app, /on_conflict=user_id,task_id,missed_day/);
