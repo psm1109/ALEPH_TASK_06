@@ -4,6 +4,7 @@ import { missedDaysToRecord } from "./missed-days.mjs";
 import {
   blockerRecordsFromExecutions,
   completionRecordsFromExecutions,
+  inclusiveISODateCount,
   millisecondsUntilNextSeoulDay,
   taskHasExecutionForDate,
   taskNeedsDailyReset,
@@ -769,16 +770,20 @@ function getSeeSummary() {
     ? blockerRecordsFromExecutions(state.taskExecutions, plan.start_date, plan.end_date)
       .filter((record) => taskIds.has(String(record.task_id)))
     : [];
-  const expectedMinutes = tasks.reduce((sum, task) => sum + Number(task.estimated_minutes || 0), 0);
+  const dailyExpectedMinutes = tasks.reduce((sum, task) => sum + Number(task.estimated_minutes || 0), 0);
+  const expectedElapsedDays = plan ? inclusiveISODateCount(plan.start_date, toSeoulISODate()) : 0;
+  const elapsedExpectedMinutes = dailyExpectedMinutes * expectedElapsedDays;
   const actualMinutes = state.taskExecutions.reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0);
   return {
     tasks,
     completedTasks,
     periodCompletionEvents,
     periodBlockerRecords,
-    expectedMinutes,
+    dailyExpectedMinutes,
+    expectedElapsedDays,
+    elapsedExpectedMinutes,
     actualMinutes,
-    gapMinutes: actualMinutes - expectedMinutes,
+    gapMinutes: actualMinutes - dailyExpectedMinutes,
   };
 }
 
@@ -894,10 +899,26 @@ function renderSeeEvidence(summary) {
       : '<div class="task-empty"><strong>막힘 이유가 등록된 할 일이 없어요</strong></div>';
     return;
   }
+  if (state.seeEvidenceType === "expected") {
+    $$("#see-metrics [data-see-evidence]").forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.seeEvidence === "expected");
+    });
+    $("#see-evidence-title").textContent = "예상 시간의 근거 기록";
+    $("#see-evidence-description").textContent = `일일 합계 ${formatMinutes(summary.dailyExpectedMinutes)} × 집계 시작일부터 오늘까지 ${summary.expectedElapsedDays}일입니다.`;
+    $("#see-evidence-count").textContent = `${summary.tasks.length}건`;
+    $("#see-evidence-list").innerHTML = summary.tasks.length
+      ? summary.tasks.map((task) => `
+        <article class="see-evidence-item see-evidence-value-item">
+          <strong>${escapeHTML(task.title)}</strong>
+          <span>${formatMinutes(task.estimated_minutes)} / 일</span>
+        </article>
+      `).join("")
+      : '<div class="task-empty"><strong>예상 시간이 등록된 할 일이 없어요</strong></div>';
+    return;
+  }
   const currentPlanTasks = tasksForCurrentPlan(summary.tasks);
   const definitions = {
     planned: { title: "할 일 수의 근거 기록", description: "현재 계획에 연결된, 삭제되지 않은 할 일입니다.", tasks: currentPlanTasks },
-    expected: { title: "예상 시간의 근거 기록", description: "각 할 일에 저장된 예상 시간의 합계입니다.", tasks: summary.tasks },
     actual: { title: "실제 시간의 근거 기록", description: "실행 기록이 있는 할 일별 실제 시간 합계입니다.", tasks: summary.tasks.filter((task) => actualMinutesForTask(task.id) > 0) },
     gap: { title: "예상 대비 차이의 근거 기록", description: "할 일별 실제 시간에서 예상 시간을 뺀 값입니다.", tasks: summary.tasks },
   };
@@ -980,7 +1001,7 @@ function renderCompletionSummary() {
   $("#see-completion-count").textContent = summary.periodCompletionEvents.length;
   $("#see-overdue-count").textContent = missedDaysForCurrentPlan(summary.tasks).length;
   $("#see-blocked-count").textContent = summary.periodBlockerRecords.length;
-  $("#see-expected-time").textContent = formatMinutes(summary.expectedMinutes);
+  $("#see-expected-time").textContent = formatMinutes(summary.elapsedExpectedMinutes);
   $("#see-actual-time").textContent = formatMinutes(summary.actualMinutes);
   $("#see-time-gap").textContent = formatSignedMinutes(summary.gapMinutes);
   renderSeeEvidence(summary);

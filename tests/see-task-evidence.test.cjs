@@ -40,3 +40,19 @@ test("완료 수는 집계 기간의 완료 기록을 세고 날짜별 펼치기
   assert.match(evidenceRenderer, /<details class="execution-date-group">/);
   assert.match(evidenceRenderer, /taskTitle\(event\.task_id\)/);
 });
+
+test("예상 시간은 일일 합계에 집계 시작일부터 오늘까지 일수를 곱한다", () => {
+  const evidenceRenderer = app.slice(
+    app.indexOf("function renderSeeEvidence"),
+    app.indexOf("function renderCompletionHistory"),
+  );
+  assert.match(html, /data-see-evidence="expected"><span>예상 시간<\/span>[\s\S]*?<small>일일 합계 × 시작일부터 오늘<\/small>/);
+  assert.match(app, /const dailyExpectedMinutes = tasks\.reduce/);
+  assert.match(app, /const expectedElapsedDays = plan \? inclusiveISODateCount\(plan\.start_date, toSeoulISODate\(\)\) : 0/);
+  assert.match(app, /const elapsedExpectedMinutes = dailyExpectedMinutes \* expectedElapsedDays/);
+  assert.match(app, /\$\("#see-expected-time"\)\.textContent = formatMinutes\(summary\.elapsedExpectedMinutes\)/);
+  assert.match(evidenceRenderer, /state\.seeEvidenceType === "expected"/);
+  assert.match(evidenceRenderer, /escapeHTML\(task\.title\)/);
+  assert.match(evidenceRenderer, /formatMinutes\(task\.estimated_minutes\)/);
+  assert.match(app, /gapMinutes: actualMinutes - dailyExpectedMinutes/);
+});

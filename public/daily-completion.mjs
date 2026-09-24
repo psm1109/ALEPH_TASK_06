@@ -11,6 +11,13 @@ export function toSeoulISODate(value = new Date()) {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
+export function inclusiveISODateCount(startDate, endDate) {
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return 0;
+  return Math.floor((end - start) / 86400000) + 1;
+}
+
 export function isTaskCompletedToday(task, today = toSeoulISODate()) {
   return task.is_completed === true && toSeoulISODate(task.completed_at) === today;
 }
