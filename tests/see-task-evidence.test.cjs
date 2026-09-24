@@ -20,7 +20,7 @@ test("일반 근거 기록은 제목만 표시하고 막힘 기록은 날짜와 
     app.indexOf("function renderSeeEvidence"),
     app.indexOf("function renderCompletionHistory"),
   );
-  assert.match(evidenceRenderer, /<article class="see-evidence-item"><strong>\$\{escapeHTML\(task\.title\)\}<\/strong><\/article>/);
+  assert.match(evidenceRenderer, /<article class="see-evidence-item see-evidence-task-item"><strong>\$\{escapeHTML\(task\.title\)\}<\/strong><\/article>/);
   assert.match(evidenceRenderer, /<strong>\$\{escapeHTML\(record\.task_title\)\}<\/strong>/);
   assert.doesNotMatch(evidenceRenderer, /see-evidence-values|see-status/);
   assert.match(evidenceRenderer, /state\.seeEvidenceType === "blocked"/);
@@ -39,6 +39,7 @@ test("완료 수는 집계 기간의 완료 기록을 세고 날짜별 펼치기
   assert.match(evidenceRenderer, /state\.seeEvidenceType === "completed"/);
   assert.match(evidenceRenderer, /<details class="execution-date-group">/);
   assert.match(evidenceRenderer, /taskTitle\(event\.task_id\)/);
+  assert.match(evidenceRenderer, /\.sort\(\(\[a\], \[b\]\) => b\.localeCompare\(a\)\)/);
 });
 
 test("예상 시간은 일일 합계에 집계 시작일부터 오늘까지 일수를 곱한다", () => {
@@ -54,6 +55,7 @@ test("예상 시간은 일일 합계에 집계 시작일부터 오늘까지 일�
   assert.match(evidenceRenderer, /state\.seeEvidenceType === "expected"/);
   assert.match(evidenceRenderer, /escapeHTML\(task\.title\)/);
   assert.match(evidenceRenderer, /formatMinutes\(task\.estimated_minutes\)/);
+  assert.match(evidenceRenderer, /see-evidence-value-item/);
   assert.match(app, /gapMinutes: actualMinutes - elapsedExpectedMinutes/);
 });
 
@@ -85,4 +87,7 @@ test("예상 대비 차이는 실제에서 누적 예상을 빼고 날짜별 상
   assert.match(evidenceRenderer, /예상 \$\{formatMinutes\(expectedMinutes\)\}/);
   assert.match(evidenceRenderer, /차이 \$\{formatSignedMinutes\(actualMinutes - expectedMinutes\)\}/);
   assert.match(evidenceRenderer, /<span class="execution-date-total">일일 총 시간 차이 \$\{formatSignedMinutes\(dateGapMinutes\)\}<\/span>/);
+  assert.match(app, /is-date-scroll/);
+  assert.match(app, /is-today/);
+  assert.doesNotMatch(evidenceRenderer, /<details class="execution-date-group" open>/);
 });

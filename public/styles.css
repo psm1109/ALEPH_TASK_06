@@ -267,6 +267,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .execution-date-group[open] > summary::after { transform: rotate(180deg); }
 .execution-date-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .execution-date-heading strong { font-size: .9rem; }
+.execution-date-heading strong.is-today { color: var(--green-dark); font-weight: 900; }
 .execution-date-heading small { color: var(--green-dark); font-size: .72rem; font-weight: 800; }
 .execution-date-total { color: var(--ink-soft); font-size: .78rem; font-weight: 800; white-space: nowrap; }
 .execution-date-logs { display: grid; gap: 9px; padding: 0 14px 14px; }
@@ -288,7 +289,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .see-metric small { color: var(--muted); font-size: .68rem; }
 .see-evidence-card:focus { outline: 3px solid rgba(36,154,114,.2); outline-offset: 3px; }
 .see-evidence-list { display: grid; gap: 9px; }
+.see-evidence-list.is-date-scroll { max-height: min(62vh, 620px); overflow-y: auto; padding-right: 6px; scrollbar-gutter: stable; }
 .see-evidence-item { display: block; padding: 14px 15px; border: 1px solid var(--line); border-radius: 13px; background: #fbfcfb; }
+.see-evidence-task-item, .see-evidence-value-item { min-height: 54px; }
 .see-evidence-item > strong { overflow-wrap: anywhere; font-size: .86rem; }
 .see-evidence-value-item { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .see-evidence-value-item > span { flex: none; color: var(--muted); font-size: .82rem; font-weight: 800; }
@@ -411,6 +414,7 @@ input:focus, textarea:focus, select:focus { border-color: #73bda2; }
   .see-metrics { grid-template-columns: 1fr; }
   .completion-task-card { grid-template-columns: 1fr; }
   .completion-task-times { justify-content: flex-start; }
+  .see-evidence-list.is-date-scroll { max-height: 55vh; }
   .record-meta, .version-card > time { grid-column: 2; justify-items: start; text-align: left; }
   .form-grid { grid-template-columns: 1fr; }
   .form-grid .full { grid-column: auto; }

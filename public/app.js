@@ -823,6 +823,8 @@ function missedDaysForCurrentPlan(tasks = state.tasks) {
 }
 
 function renderSeeEvidence(summary) {
+  const dateEvidenceTypes = new Set(["completed", "overdue", "blocked", "actual", "gap"]);
+  $("#see-evidence-list").classList.toggle("is-date-scroll", dateEvidenceTypes.has(state.seeEvidenceType));
   if (state.seeEvidenceType === "completed") {
     $$("#see-metrics [data-see-evidence]").forEach((button) => {
       button.classList.toggle("is-active", button.dataset.seeEvidence === "completed");
@@ -836,9 +838,9 @@ function renderSeeEvidence(summary) {
       groups.get(event.completed_day).push(event);
     }
     $("#see-evidence-list").innerHTML = groups.size
-      ? [...groups.entries()].map(([day, events]) => `
+      ? [...groups.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([day, events]) => `
         <details class="execution-date-group">
-          <summary><span class="execution-date-heading"><strong>${formatExecutionDate(day)}</strong><small>${events.length}건 완료</small></span></summary>
+          <summary><span class="execution-date-heading"><strong class="${day === toSeoulISODate() ? "is-today" : ""}">${formatExecutionDate(day)}</strong><small>${events.length}건 완료</small></span></summary>
           <div class="completion-date-list">${events.map((event) => `
             <article class="see-evidence-item"><strong>${escapeHTML(taskTitle(event.task_id))}</strong></article>
           `).join("")}</div>
@@ -861,9 +863,9 @@ function renderSeeEvidence(summary) {
       groups.get(record.missed_day).push(record);
     }
     $("#see-evidence-list").innerHTML = groups.size
-      ? [...groups.entries()].map(([day, records]) => `
-        <details class="execution-date-group" open>
-          <summary><span class="execution-date-heading"><strong>${formatExecutionDate(day)}</strong><small>${records.length}건 미완료</small></span></summary>
+      ? [...groups.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([day, records]) => `
+        <details class="execution-date-group">
+          <summary><span class="execution-date-heading"><strong class="${day === toSeoulISODate() ? "is-today" : ""}">${formatExecutionDate(day)}</strong><small>${records.length}건 미완료</small></span></summary>
           <div class="completion-date-list">${records.map((record) => `
             <article class="see-evidence-item">
               <strong>${escapeHTML(record.task_title)}</strong>
@@ -887,9 +889,9 @@ function renderSeeEvidence(summary) {
       groups.get(record.blocked_day).push(record);
     }
     $("#see-evidence-list").innerHTML = groups.size
-      ? [...groups.entries()].map(([day, records]) => `
-        <details class="execution-date-group" open>
-          <summary><span class="execution-date-heading"><strong>${formatExecutionDate(day)}</strong><small>${records.length}건 막힘</small></span></summary>
+      ? [...groups.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([day, records]) => `
+        <details class="execution-date-group">
+          <summary><span class="execution-date-heading"><strong class="${day === toSeoulISODate() ? "is-today" : ""}">${formatExecutionDate(day)}</strong><small>${records.length}건 막힘</small></span></summary>
           <div class="completion-date-list">${records.map((record) => `
             <article class="see-evidence-item">
               <strong>${escapeHTML(taskTitle(record.task_id))}</strong>
@@ -932,11 +934,11 @@ function renderSeeEvidence(summary) {
       groups.get(day).push(log);
     }
     $("#see-evidence-list").innerHTML = groups.size
-      ? [...groups.entries()].map(([day, logs]) => {
+      ? [...groups.entries()].sort(([a], [b]) => b.localeCompare(a)).map(([day, logs]) => {
         const dateTotal = logs.reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0);
         return `
-          <details class="execution-date-group" open>
-            <summary><span class="execution-date-heading"><strong>${formatExecutionDate(day)}</strong><small>${logs.length}건 · ${formatMinutes(dateTotal)}</small></span></summary>
+          <details class="execution-date-group">
+            <summary><span class="execution-date-heading"><strong class="${day === toSeoulISODate() ? "is-today" : ""}">${formatExecutionDate(day)}</strong><small>${logs.length}건 · ${formatMinutes(dateTotal)}</small></span></summary>
             <div class="completion-date-list">${logs.map((log) => `
               <article class="see-evidence-item see-evidence-value-item">
                 <strong>${escapeHTML(taskTitle(log.task_id))}</strong>
@@ -961,9 +963,9 @@ function renderSeeEvidence(summary) {
         const dateActualMinutes = summary.tasks.reduce((sum, task) => sum + actualMinutesForTaskOnDate(task.id, date), 0);
         const dateGapMinutes = dateActualMinutes - summary.dailyExpectedMinutes;
         return `
-          <details class="execution-date-group" open>
+          <details class="execution-date-group">
             <summary>
-              <span class="execution-date-heading"><strong>${formatExecutionDate(date)}</strong></span>
+              <span class="execution-date-heading"><strong class="${date === toSeoulISODate() ? "is-today" : ""}">${formatExecutionDate(date)}</strong></span>
               <span class="execution-date-total">일일 총 시간 차이 ${formatSignedMinutes(dateGapMinutes)}</span>
             </summary>
             <div class="completion-date-list">${summary.tasks.map((task) => {
@@ -1005,7 +1007,7 @@ function renderSeeEvidence(summary) {
   }
 
   list.innerHTML = selected.tasks
-    .map((task) => `<article class="see-evidence-item"><strong>${escapeHTML(task.title)}</strong></article>`)
+    .map((task) => `<article class="see-evidence-item see-evidence-task-item"><strong>${escapeHTML(task.title)}</strong></article>`)
     .join("");
 }
 
