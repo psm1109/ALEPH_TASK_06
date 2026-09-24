@@ -2,6 +2,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { encryptAuthCredentials } from "./auth-crypto.mjs";
 import { missedDaysToRecord } from "./missed-days.mjs";
 import {
+  completionEventsForPeriod,
   isTaskCompletedToday,
   millisecondsUntilNextSeoulDay,
   taskNeedsDailyReset,
@@ -761,13 +762,18 @@ function formatSignedMinutes(value) {
 
 function getSeeSummary() {
   const tasks = [...state.tasks];
+  const plan = currentPlan();
   const completedTasks = tasks.filter((task) => isTaskCompletedToday(task));
+  const periodCompletionEvents = plan
+    ? completionEventsForPeriod(state.completionEvents, plan.start_date, plan.end_date)
+    : [];
   const blockedTasks = tasks.filter((task) => blockerReasonsForTask(task.id).length > 0);
   const expectedMinutes = tasks.reduce((sum, task) => sum + Number(task.estimated_minutes || 0), 0);
   const actualMinutes = state.taskExecutions.reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0);
   return {
     tasks,
     completedTasks,
+    periodCompletionEvents,
     blockedTasks,
     expectedMinutes,
     actualMinutes,
@@ -782,6 +788,30 @@ function tasksForCurrentPlan(tasks = state.tasks) {
 }
 
 function renderSeeEvidence(summary) {
+  if (state.seeEvidenceType === "completed") {
+    $$("#see-metrics [data-see-evidence]").forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.seeEvidence === "completed");
+    });
+    $("#see-evidence-title").textContent = "완료 수의 근거 기록";
+    $("#see-evidence-description").textContent = "집계 기간에 완료한 할 일을 날짜별로 표시합니다.";
+    $("#see-evidence-count").textContent = `${summary.periodCompletionEvents.length}건`;
+    const groups = new Map();
+    for (const event of summary.periodCompletionEvents) {
+      if (!groups.has(event.completed_day)) groups.set(event.completed_day, []);
+      groups.get(event.completed_day).push(event);
+    }
+    $("#see-evidence-list").innerHTML = groups.size
+      ? [...groups.entries()].map(([day, events]) => `
+        <details class="execution-date-group">
+          <summary><span class="execution-date-heading"><strong>${formatExecutionDate(day)}</strong><small>${events.length}건 완료</small></span></summary>
+          <div class="completion-date-list">${events.map((event) => `
+            <article class="see-evidence-item"><strong>${escapeHTML(taskTitle(event.task_id))}</strong></article>
+          `).join("")}</div>
+        </details>
+      `).join("")
+      : '<div class="task-empty"><strong>집계 기간의 완료 기록이 없어요</strong></div>';
+    return;
+  }
   if (state.seeEvidenceType === "overdue") {
     $$("#see-metrics [data-see-evidence]").forEach((button) => {
       button.classList.toggle("is-active", button.dataset.seeEvidence === "overdue");
@@ -811,7 +841,6 @@ function renderSeeEvidence(summary) {
   const currentPlanTasks = tasksForCurrentPlan(summary.tasks);
   const definitions = {
     planned: { title: "할 일 수의 근거 기록", description: "현재 계획에 연결된, 삭제되지 않은 할 일입니다.", tasks: currentPlanTasks },
-    completed: { title: "완료 수의 근거 기록", description: "지금 완료 체크가 유지된 할 일만 포함합니다.", tasks: summary.completedTasks },
     blocked: { title: "막힘 수의 근거 기록", description: "실행 기록에 실제 막힌 이유가 한 번이라도 남은 할 일입니다.", tasks: summary.blockedTasks },
     expected: { title: "예상 시간의 근거 기록", description: "각 할 일에 저장된 예상 시간의 합계입니다.", tasks: summary.tasks },
     actual: { title: "실제 시간의 근거 기록", description: "실행 기록이 있는 할 일별 실제 시간 합계입니다.", tasks: summary.tasks.filter((task) => actualMinutesForTask(task.id) > 0) },
@@ -896,7 +925,7 @@ function renderCompletionSummary() {
     ? `${formatDate(plan.start_date)} – ${formatDate(plan.end_date)}`
     : "첫 계획을 세우면 집계 기간이 표시됩니다.";
   $("#see-task-count").textContent = tasksForCurrentPlan(summary.tasks).length;
-  $("#see-completion-count").textContent = summary.completedTasks.length;
+  $("#see-completion-count").textContent = summary.periodCompletionEvents.length;
   $("#see-overdue-count").textContent = state.missedDays.length;
   $("#see-blocked-count").textContent = summary.blockedTasks.length;
   $("#see-expected-time").textContent = formatMinutes(summary.expectedMinutes);

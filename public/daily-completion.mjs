@@ -40,6 +40,21 @@ export function completedTaskIdsForDate(events, tasks, date, today = toSeoulISOD
   return ids;
 }
 
+export function completionEventsForPeriod(events, startDate, endDate) {
+  if (!startDate || !endDate) return [];
+  return events
+    .map((event) => ({
+      ...event,
+      completed_day: event.completed_day || toSeoulISODate(event.completed_at),
+    }))
+    .filter((event) => event.completed_day >= startDate && event.completed_day <= endDate)
+    .sort((a, b) => {
+      const dayOrder = b.completed_day.localeCompare(a.completed_day);
+      if (dayOrder) return dayOrder;
+      return new Date(b.completed_at || 0) - new Date(a.completed_at || 0);
+    });
+}
+
 export function weeklyDayRecord(events, tasks, executionLogs, date, today = toSeoulISODate()) {
   const completionCount = completedTaskIdsForDate(events, tasks, date, today).size;
   const entries = executionLogs.filter((log) => toSeoulISODate(log.start_time) === date);

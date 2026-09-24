@@ -38,6 +38,19 @@ test("같은 할 일을 여러 날 완료하면 각 날짜에 체크한다", asy
   assert.equal(completedTaskIdsForDate(events, [], "2026-09-24", "2026-09-24").size, 0);
 });
 
+test("돌아보기 완료 수는 집계 기간의 날짜별 완료 기록을 합산한다", async () => {
+  const { completionEventsForPeriod } = await dailyCompletion();
+  const events = [
+    { id: 1, task_id: 7, completed_day: "2026-09-21", completed_at: "2026-09-21T10:00:00Z" },
+    { id: 2, task_id: 7, completed_day: "2026-09-22", completed_at: "2026-09-22T10:00:00Z" },
+    { id: 3, task_id: 7, completed_day: "2026-09-23", completed_at: "2026-09-23T10:00:00Z" },
+    { id: 4, task_id: 8, completed_day: "2026-09-24", completed_at: "2026-09-24T10:00:00Z" },
+  ];
+  const records = completionEventsForPeriod(events, "2026-09-22", "2026-09-23");
+  assert.deepEqual(records.map((event) => event.id), [3, 2]);
+  assert.deepEqual(records.map((event) => event.task_id), [7, 7]);
+});
+
 test("오늘 체크를 풀면 즉시 사라지고 다음 날에는 남아 있던 기록만 보인다", async () => {
   const { completedTaskIdsForDate } = await dailyCompletion();
   const task = { id: 7, is_completed: true, completed_at: "2026-09-23T14:00:00Z" };

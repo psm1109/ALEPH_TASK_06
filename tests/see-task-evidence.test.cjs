@@ -23,3 +23,15 @@ test("근거 기록의 각 할 일에는 제목만 표시한다", () => {
   assert.match(evidenceRenderer, /<strong>\$\{escapeHTML\(record\.task_title\)\}<\/strong>/);
   assert.doesNotMatch(evidenceRenderer, /see-evidence-values|see-status|막힘 이유/);
 });
+
+test("완료 수는 집계 기간의 완료 기록을 세고 날짜별 펼치기로 표시한다", () => {
+  const evidenceRenderer = app.slice(
+    app.indexOf("function renderSeeEvidence"),
+    app.indexOf("function renderCompletionHistory"),
+  );
+  assert.match(html, /data-see-evidence="completed"><span>완료 수<\/span>[\s\S]*?<small>집계 기간 내 완료 기록<\/small>/);
+  assert.match(app, /\$\("#see-completion-count"\)\.textContent = summary\.periodCompletionEvents\.length/);
+  assert.match(evidenceRenderer, /state\.seeEvidenceType === "completed"/);
+  assert.match(evidenceRenderer, /<details class="execution-date-group">/);
+  assert.match(evidenceRenderer, /taskTitle\(event\.task_id\)/);
+});
