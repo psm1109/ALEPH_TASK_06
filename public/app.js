@@ -9,7 +9,7 @@ import {
 } from "./daily-completion.mjs";
 
 const WORKSPACE_ID = "pds-main";
-const EXPORT_SCHEMA_VERSION = "2.1.0";
+const EXPORT_SCHEMA_VERSION = "2.2.0";
 const GENERIC_LOGIN_ERROR = "이메일 또는 비밀번호를 확인해 주세요.";
 
 const state = {

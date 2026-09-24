@@ -38,13 +38,16 @@ test("같은 할 일을 여러 날 완료하면 각 날짜에 체크한다", asy
   assert.equal(completedTaskIdsForDate(events, [], "2026-09-24", "2026-09-24").size, 0);
 });
 
-test("오늘 완료 상태를 즉시 표시하고 같은 할 일의 이벤트와 중복 집계하지 않는다", async () => {
+test("오늘 체크를 풀면 즉시 사라지고 다음 날에는 남아 있던 기록만 보인다", async () => {
   const { completedTaskIdsForDate } = await dailyCompletion();
   const task = { id: 7, is_completed: true, completed_at: "2026-09-23T14:00:00Z" };
   const firstEvent = { task_id: 7, completed_day: "2026-09-22", completed_at: "2026-09-22T14:00:00Z" };
   assert.deepEqual([...completedTaskIdsForDate([firstEvent], [task], "2026-09-23", "2026-09-23")], ["7"]);
   const sameDayEvent = { task_id: 7, completed_day: "2026-09-23", completed_at: task.completed_at };
   assert.equal(completedTaskIdsForDate([firstEvent, sameDayEvent], [task], "2026-09-23", "2026-09-23").size, 1);
+  const unchecked = { ...task, is_completed: false, completed_at: null };
+  assert.equal(completedTaskIdsForDate([firstEvent, sameDayEvent], [unchecked], "2026-09-23", "2026-09-23").size, 0);
+  assert.deepEqual([...completedTaskIdsForDate([firstEvent], [unchecked], "2026-09-22", "2026-09-23")], ["7"]);
 });
 
 test("주간 칸에서 완료 체크와 실행 시간을 독립적으로 계산한다", async () => {
@@ -61,6 +64,9 @@ test("주간 칸에서 완료 체크와 실행 시간을 독립적으로 계산�
   assert.deepEqual(weeklyDayRecord([], [completedTask], [execution], date, date), {
     completionCount: 1, executionCount: 1, minutes: 89,
   });
+  assert.deepEqual(weeklyDayRecord([], [{ ...completedTask, is_completed: false }], [execution], date, date), {
+    completionCount: 0, executionCount: 1, minutes: 89,
+  });
 });
 
 test("완료 직후 주간 화면을 갱신하고 날짜 변경 시 저장 상태를 동기화한다", () => {
@@ -71,11 +77,12 @@ test("완료 직후 주간 화면을 갱신하고 날짜 변경 시 저장 상�
   assert.match(app, /await resetExpiredTaskCompletions\(toSeoulISODate\(\)\)/);
 });
 
-test("기존 SQL과 증분 SQL은 할 일·날짜별 고유 완료 이벤트를 허용한다", () => {
+test("당일 해제는 이벤트를 제거하고 자정 후 초기화는 전날 이벤트를 보존한다", () => {
   for (const file of ["supabase/schema.sql", "supabase/daily-completion.sql"]) {
     const sql = read(file);
     assert.match(sql, /on public\.task_completion_events \(user_id, task_id, completed_day\)/);
-    assert.match(sql, /on conflict \(user_id, task_id, completed_day\) do nothing/);
-    assert.match(sql, /old\.completed_at at time zone 'Asia\/Seoul'/);
+    assert.match(sql, /on conflict \(user_id, task_id, completed_day\)\s+do update set completed_at = excluded\.completed_at/);
+    assert.match(sql, /elsif old\.is_completed = true and new\.is_completed = false then/);
+    assert.match(sql, /delete from public\.task_completion_events\s+where user_id = old\.user_id and task_id = old\.id\s+and completed_day = \(now\(\) at time zone 'Asia\/Seoul'\)::date/);
   }
 });

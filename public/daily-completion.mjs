@@ -26,16 +26,17 @@ export function millisecondsUntilNextSeoulDay(now = new Date()) {
 }
 
 export function completedTaskIdsForDate(events, tasks, date, today = toSeoulISODate()) {
+  // Today's display follows the current checkbox state. A completion event
+  // becomes historical evidence only after that Seoul calendar day ends.
+  if (date === today) {
+    return new Set(tasks
+      .filter((task) => isTaskCompletedToday(task, today))
+      .map((task) => String(task.id)));
+  }
+
   const ids = new Set(events
     .filter((event) => (event.completed_day || toSeoulISODate(event.completed_at)) === date)
     .map((event) => String(event.task_id)));
-
-  // The task timestamp lets today's check appear even when an older database
-  // still has the former one-event-per-task constraint.
-  if (date === today) {
-    tasks.filter((task) => isTaskCompletedToday(task, today))
-      .forEach((task) => ids.add(String(task.id)));
-  }
   return ids;
 }
 

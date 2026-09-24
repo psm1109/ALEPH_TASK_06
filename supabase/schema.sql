@@ -328,7 +328,14 @@ begin
   ) then
     insert into public.task_completion_events (user_id, workspace_id, task_id, completed_at, completed_day)
     values (new.user_id, new.workspace_id, new.id, completion_time, completion_day)
-    on conflict (user_id, task_id, completed_day) do nothing;
+    on conflict (user_id, task_id, completed_day)
+    do update set completed_at = excluded.completed_at;
+  elsif old.is_completed = true and new.is_completed = false then
+    -- An unchecked task must disappear from today's record. After midnight,
+    -- the previous day's event is retained as the final daily state.
+    delete from public.task_completion_events
+    where user_id = old.user_id and task_id = old.id
+      and completed_day = (now() at time zone 'Asia/Seoul')::date;
   end if;
   return new;
 end;
@@ -350,5 +357,12 @@ from public.tasks
 where is_completed = true
   and user_id is not null
 on conflict (user_id, task_id, completed_day) do nothing;
+
+delete from public.task_completion_events e
+using public.tasks t
+where e.task_id = t.id and e.user_id = t.user_id
+  and e.completed_day = (now() at time zone 'Asia/Seoul')::date
+  and (t.is_completed = false or
+    (t.completed_at at time zone 'Asia/Seoul')::date is distinct from e.completed_day);
 
 -- plan_versions are append-only. Other diary records can be updated or deleted by their owner.

@@ -1,5 +1,7 @@
--- Apply once to an existing PDS Diary database before deploying the daily
--- completion UI. Existing completion events and execution logs are preserved.
+-- Apply to an existing PDS Diary database before deploying the daily
+-- completion UI. It is safe to rerun after the earlier daily-completion version.
+-- Past completion events and execution logs are preserved; today's unchecked
+-- events are removed so today's record follows the current task state.
 begin;
 
 alter table public.task_completion_events
@@ -36,7 +38,14 @@ begin
   ) then
     insert into public.task_completion_events (user_id, workspace_id, task_id, completed_at, completed_day)
     values (new.user_id, new.workspace_id, new.id, completion_time, completion_day)
-    on conflict (user_id, task_id, completed_day) do nothing;
+    on conflict (user_id, task_id, completed_day)
+    do update set completed_at = excluded.completed_at;
+  elsif old.is_completed = true and new.is_completed = false then
+    -- Unchecking today removes today's event. A rollover reset preserves
+    -- yesterday's event because its completed_day is earlier than today.
+    delete from public.task_completion_events
+    where user_id = old.user_id and task_id = old.id
+      and completed_day = (now() at time zone 'Asia/Seoul')::date;
   end if;
   return new;
 end;
@@ -60,5 +69,12 @@ from public.tasks
 where is_completed = true
   and user_id is not null
 on conflict (user_id, task_id, completed_day) do nothing;
+
+delete from public.task_completion_events e
+using public.tasks t
+where e.task_id = t.id and e.user_id = t.user_id
+  and e.completed_day = (now() at time zone 'Asia/Seoul')::date
+  and (t.is_completed = false or
+    (t.completed_at at time zone 'Asia/Seoul')::date is distinct from e.completed_day);
 
 commit;
