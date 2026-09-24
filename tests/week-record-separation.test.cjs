@@ -55,6 +55,20 @@ test("돌아보기 완료 수는 집계 기간의 실행 기록으로 만든 완
   assert.deepEqual(records.map((record) => record.task_id), [7, 7]);
 });
 
+test("실제 시간은 집계 기간의 실행 기록만 날짜별 합산 대상으로 사용한다", async () => {
+  const { executionLogsInPeriod } = await dailyCompletion();
+  const logs = [
+    { id: 1, start_time: "2026-09-21T01:00:00Z", actual_minutes: 10 },
+    { id: 2, start_time: "2026-09-22T01:00:00Z", actual_minutes: 30 },
+    { id: 3, start_time: "2026-09-22T03:00:00Z", actual_minutes: 40 },
+    { id: 4, start_time: "2026-09-23T01:00:00Z", actual_minutes: 50 },
+    { id: 5, start_time: "2026-09-24T01:00:00Z", actual_minutes: 60 },
+  ];
+  const records = executionLogsInPeriod(logs, "2026-09-22", "2026-09-23");
+  assert.deepEqual(records.map((record) => record.id), [4, 3, 2]);
+  assert.equal(records.reduce((sum, record) => sum + record.actual_minutes, 0), 120);
+});
+
 test("같은 할 일의 막힘 이유도 실행 기록마다 각각 센다", async () => {
   const { blockerRecordsFromExecutions } = await dailyCompletion();
   const logs = [

@@ -6,8 +6,8 @@
 
 - 저장소: `psm1109/ALEPH_TASK_06`
 - 작업 브랜치: `codex/card-1-auth`
-- 현재 기준 커밋: `2227a35` (이번 예상 시간 수정의 부모 커밋)
-- 원격에 올라간 잘못된 예상 시간 계산 커밋을 시작일부터 오늘까지의 계산으로 교체하는 작업입니다.
+- 현재 기준 커밋: `6838acf`
+- 예상 시간 계산 수정까지 원격에 반영되어 있으며, 작업 트리에는 아래 실제 시간 날짜별 집계 변경이 아직 커밋되지 않은 상태로 남아 있습니다.
 - 원격 추적 브랜치: `origin/codex/card-1-auth`
 - 고정된 최종 T06 조상 커밋: `bab809b`
 - 현재 브랜치에는 병합 커밋 `59530ab`과 카드 1의 과거 커밋 두 개가 함께 있습니다. 앞으로는 현재 브랜치의 최신 파일과 HEAD를 기준으로 작업합니다.
@@ -515,6 +515,36 @@ git diff --check
 확인하지 않은 항목:
 
 - 요청에 따라 로그인 후 실제 예상 시간과 항목별 근거 표시 화면은 확인하지 않았습니다.
+
+### 2026-09-24 실제 시간을 날짜별 실행 완료 기록으로 집계
+
+- 돌아보기 실제 시간은 현재 계획의 집계 시작일~종료일 안에 있는 실행 기록만 합산합니다.
+- 실제 시간 근거 기록은 날짜별 펼치기로 표시하고, 날짜 제목에 해당 날짜의 실행 기록 건수와 실제 시간 합계를 함께 표시합니다.
+- 각 날짜 안에는 실행 완료 내역의 할 일 제목과 실제 소요 시간을 표시합니다.
+- 예상 대비 차이를 포함한 다른 돌아보기 항목의 기존 계산은 변경하지 않았습니다.
+
+관련 파일:
+
+- `public/daily-completion.mjs`
+- `public/app.js`
+- `public/index.html`
+- `tests/week-record-separation.test.cjs`
+- `tests/see-task-evidence.test.cjs`
+- `README.md`
+- `PROJECT_CONTEXT.md`
+
+실행한 검사:
+
+- `node tests\week-record-separation.test.cjs` — 12개 통과
+- `node tests\see-task-evidence.test.cjs` — 5개 통과
+- `tests`의 `*.test.cjs`, `*.test.mjs` 전체 Node 검사 — 34개 통과, 실패 0개
+- `node --check public\app.js` — 통과
+- `node --check public\daily-completion.mjs` — 통과
+- `git diff --check` — 통과(LF→CRLF 안내만 표시)
+
+확인하지 않은 항목:
+
+- 요청에 따라 로그인 후 실제 시간의 날짜별 합계와 실행 완료 내역 화면은 확인하지 않았습니다.
 
 ## 아직 필요한 실제 확인
 

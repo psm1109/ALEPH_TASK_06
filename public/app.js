@@ -4,6 +4,7 @@ import { missedDaysToRecord } from "./missed-days.mjs";
 import {
   blockerRecordsFromExecutions,
   completionRecordsFromExecutions,
+  executionLogsInPeriod,
   inclusiveISODateCount,
   millisecondsUntilNextSeoulDay,
   taskHasExecutionForDate,
@@ -746,12 +747,6 @@ function renderTaskExecutions() {
   }).join("");
 }
 
-function actualMinutesForTask(taskId) {
-  return state.taskExecutions
-    .filter((log) => String(log.task_id) === String(taskId))
-    .reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0);
-}
-
 function formatSignedMinutes(value) {
   const minutes = Number(value || 0);
   if (!minutes) return "0분";
@@ -773,7 +768,11 @@ function getSeeSummary() {
   const dailyExpectedMinutes = tasks.reduce((sum, task) => sum + Number(task.estimated_minutes || 0), 0);
   const expectedElapsedDays = plan ? inclusiveISODateCount(plan.start_date, toSeoulISODate()) : 0;
   const elapsedExpectedMinutes = dailyExpectedMinutes * expectedElapsedDays;
-  const actualMinutes = state.taskExecutions.reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0);
+  const periodExecutionLogs = plan
+    ? executionLogsInPeriod(state.taskExecutions, plan.start_date, plan.end_date)
+    : [];
+  const actualMinutes = periodExecutionLogs.reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0);
+  const allActualMinutes = state.taskExecutions.reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0);
   return {
     tasks,
     completedTasks,
@@ -782,8 +781,9 @@ function getSeeSummary() {
     dailyExpectedMinutes,
     expectedElapsedDays,
     elapsedExpectedMinutes,
+    periodExecutionLogs,
     actualMinutes,
-    gapMinutes: actualMinutes - dailyExpectedMinutes,
+    gapMinutes: allActualMinutes - dailyExpectedMinutes,
   };
 }
 
@@ -916,10 +916,40 @@ function renderSeeEvidence(summary) {
       : '<div class="task-empty"><strong>예상 시간이 등록된 할 일이 없어요</strong></div>';
     return;
   }
+  if (state.seeEvidenceType === "actual") {
+    $$("#see-metrics [data-see-evidence]").forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.seeEvidence === "actual");
+    });
+    $("#see-evidence-title").textContent = "실제 시간의 근거 기록";
+    $("#see-evidence-description").textContent = "집계 기간의 실행 완료 내역과 날짜별 실제 시간 합계입니다.";
+    $("#see-evidence-count").textContent = `${summary.periodExecutionLogs.length}건`;
+    const groups = new Map();
+    for (const log of summary.periodExecutionLogs) {
+      const day = executionDate(log);
+      if (!groups.has(day)) groups.set(day, []);
+      groups.get(day).push(log);
+    }
+    $("#see-evidence-list").innerHTML = groups.size
+      ? [...groups.entries()].map(([day, logs]) => {
+        const dateTotal = logs.reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0);
+        return `
+          <details class="execution-date-group" open>
+            <summary><span class="execution-date-heading"><strong>${formatExecutionDate(day)}</strong><small>${logs.length}건 · ${formatMinutes(dateTotal)}</small></span></summary>
+            <div class="completion-date-list">${logs.map((log) => `
+              <article class="see-evidence-item see-evidence-value-item">
+                <strong>${escapeHTML(taskTitle(log.task_id))}</strong>
+                <span>${formatMinutes(log.actual_minutes)}</span>
+              </article>
+            `).join("")}</div>
+          </details>
+        `;
+      }).join("")
+      : '<div class="task-empty"><strong>집계 기간의 실행 완료 내역이 없어요</strong></div>';
+    return;
+  }
   const currentPlanTasks = tasksForCurrentPlan(summary.tasks);
   const definitions = {
     planned: { title: "할 일 수의 근거 기록", description: "현재 계획에 연결된, 삭제되지 않은 할 일입니다.", tasks: currentPlanTasks },
-    actual: { title: "실제 시간의 근거 기록", description: "실행 기록이 있는 할 일별 실제 시간 합계입니다.", tasks: summary.tasks.filter((task) => actualMinutesForTask(task.id) > 0) },
     gap: { title: "예상 대비 차이의 근거 기록", description: "할 일별 실제 시간에서 예상 시간을 뺀 값입니다.", tasks: summary.tasks },
   };
   const selected = definitions[state.seeEvidenceType] || definitions.planned;

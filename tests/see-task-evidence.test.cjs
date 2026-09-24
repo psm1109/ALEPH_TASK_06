@@ -54,5 +54,19 @@ test("예상 시간은 일일 합계에 집계 시작일부터 오늘까지 일�
   assert.match(evidenceRenderer, /state\.seeEvidenceType === "expected"/);
   assert.match(evidenceRenderer, /escapeHTML\(task\.title\)/);
   assert.match(evidenceRenderer, /formatMinutes\(task\.estimated_minutes\)/);
-  assert.match(app, /gapMinutes: actualMinutes - dailyExpectedMinutes/);
+  assert.match(app, /gapMinutes: allActualMinutes - dailyExpectedMinutes/);
+});
+
+test("실제 시간은 집계 기간의 실행 기록을 날짜별 완료 내역으로 표시한다", () => {
+  const evidenceRenderer = app.slice(
+    app.indexOf("function renderSeeEvidence"),
+    app.indexOf("function renderCompletionHistory"),
+  );
+  assert.match(html, /data-see-evidence="actual"><span>실제 시간<\/span>[\s\S]*?<small>날짜별 실행 기록 합계<\/small>/);
+  assert.match(app, /executionLogsInPeriod\(state\.taskExecutions, plan\.start_date, plan\.end_date\)/);
+  assert.match(app, /const actualMinutes = periodExecutionLogs\.reduce/);
+  assert.match(evidenceRenderer, /state\.seeEvidenceType === "actual"/);
+  assert.match(evidenceRenderer, /const dateTotal = logs\.reduce/);
+  assert.match(evidenceRenderer, /taskTitle\(log\.task_id\)/);
+  assert.match(evidenceRenderer, /formatMinutes\(log\.actual_minutes\)/);
 });

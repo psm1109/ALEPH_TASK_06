@@ -62,6 +62,18 @@ export function completionRecordsFromExecutions(executionLogs, startDate = "", e
   });
 }
 
+export function executionLogsInPeriod(executionLogs, startDate = "", endDate = "") {
+  return executionLogs
+    .filter((log) => {
+      const executionDay = toSeoulISODate(log.start_time);
+      if (!executionDay) return false;
+      if (startDate && executionDay < startDate) return false;
+      if (endDate && executionDay > endDate) return false;
+      return true;
+    })
+    .sort((a, b) => new Date(b.start_time || 0) - new Date(a.start_time || 0));
+}
+
 export function isMeaningfulBlocker(value) {
   const normalized = String(value || "").trim().toLocaleLowerCase("ko");
   return Boolean(normalized) && !["없음", "없었음", "없어요", "none", "n/a", "-"].includes(normalized);
