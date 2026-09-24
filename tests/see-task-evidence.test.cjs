@@ -1,0 +1,25 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const test = require("node:test");
+
+const root = path.resolve(__dirname, "..");
+const html = fs.readFileSync(path.join(root, "public/index.html"), "utf8");
+const app = fs.readFileSync(path.join(root, "public/app.js"), "utf8");
+
+test("돌아보기의 첫 집계는 현재 계획에 연결된 할 일 수를 표시한다", () => {
+  assert.match(html, /data-see-evidence="planned"><span>할 일 수<\/span><strong id="see-task-count">/);
+  assert.doesNotMatch(html, /id="see-plan-count"/);
+  assert.match(app, /function tasksForCurrentPlan\(tasks = state\.tasks\)[\s\S]*?task\.plan_version\) === Number\(plan\.version\)/);
+  assert.match(app, /\$\("#see-task-count"\)\.textContent = tasksForCurrentPlan\(summary\.tasks\)\.length/);
+});
+
+test("근거 기록의 각 할 일에는 제목만 표시한다", () => {
+  const evidenceRenderer = app.slice(
+    app.indexOf("function renderSeeEvidence"),
+    app.indexOf("function renderCompletionHistory"),
+  );
+  assert.match(evidenceRenderer, /<article class="see-evidence-item"><strong>\$\{escapeHTML\(task\.title\)\}<\/strong><\/article>/);
+  assert.match(evidenceRenderer, /<strong>\$\{escapeHTML\(record\.task_title\)\}<\/strong>/);
+  assert.doesNotMatch(evidenceRenderer, /see-evidence-values|see-status|막힘 이유/);
+});

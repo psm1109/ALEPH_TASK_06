@@ -287,16 +287,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .see-metric small { color: var(--muted); font-size: .68rem; }
 .see-evidence-card:focus { outline: 3px solid rgba(36,154,114,.2); outline-offset: 3px; }
 .see-evidence-list { display: grid; gap: 9px; }
-.see-evidence-item { display: grid; gap: 10px; padding: 14px 15px; border: 1px solid var(--line); border-radius: 13px; background: #fbfcfb; }
-.see-evidence-main, .see-evidence-values { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.see-evidence-main { justify-content: space-between; }
-.see-evidence-main > strong { overflow-wrap: anywhere; font-size: .86rem; }
-.see-status { padding: 4px 8px; border-radius: 999px; font-size: .68rem; font-weight: 850; }
-.see-status.completed { color: var(--green-dark); background: var(--mint); }
-.see-status.overdue { color: #b74738; background: #fff0ed; }
-.see-status.active { color: #526076; background: #eef1f3; }
-.see-evidence-values span { padding: 5px 8px; border-radius: 8px; color: var(--ink-soft); background: #eef3f1; font-size: .72rem; }
-.see-evidence-item p { margin: 0; color: #9b4a3e; font-size: .74rem; line-height: 1.5; }
+.see-evidence-item { display: block; padding: 14px 15px; border: 1px solid var(--line); border-radius: 13px; background: #fbfcfb; }
+.see-evidence-item > strong { overflow-wrap: anywhere; font-size: .86rem; }
 .completion-date-list { display: grid; gap: 9px; padding: 0 14px 14px; }
 .completion-task-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 15px; padding: 14px 15px; border: 1px solid var(--line); border-radius: 13px; background: #fbfcfb; }
 .completion-task-card > div:first-child { display: grid; gap: 5px; }

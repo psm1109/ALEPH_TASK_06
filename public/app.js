@@ -775,6 +775,12 @@ function getSeeSummary() {
   };
 }
 
+function tasksForCurrentPlan(tasks = state.tasks) {
+  const plan = currentPlan();
+  if (!plan) return [];
+  return tasks.filter((task) => Number(task.plan_version) === Number(plan.version));
+}
+
 function renderSeeEvidence(summary) {
   if (state.seeEvidenceType === "overdue") {
     $$("#see-metrics [data-see-evidence]").forEach((button) => {
@@ -794,8 +800,7 @@ function renderSeeEvidence(summary) {
           <summary><span class="execution-date-heading"><strong>${formatExecutionDate(day)}</strong><small>${records.length}건 미완료</small></span></summary>
           <div class="completion-date-list">${records.map((record) => `
             <article class="see-evidence-item">
-              <div class="see-evidence-main"><strong>${escapeHTML(record.task_title)}</strong><span class="see-status overdue">미완료</span></div>
-              <div class="see-evidence-values"><span>마감 ${formatDate(record.due_date)}</span></div>
+              <strong>${escapeHTML(record.task_title)}</strong>
             </article>
           `).join("")}</div>
         </details>
@@ -803,8 +808,9 @@ function renderSeeEvidence(summary) {
       : '<div class="task-empty"><strong>지난 날짜의 미완료 기록이 없어요</strong></div>';
     return;
   }
+  const currentPlanTasks = tasksForCurrentPlan(summary.tasks);
   const definitions = {
-    planned: { title: "계획 수의 근거 기록", description: "현재 계획에 연결된, 삭제되지 않은 모든 할 일입니다.", tasks: summary.tasks },
+    planned: { title: "할 일 수의 근거 기록", description: "현재 계획에 연결된, 삭제되지 않은 할 일입니다.", tasks: currentPlanTasks },
     completed: { title: "완료 수의 근거 기록", description: "지금 완료 체크가 유지된 할 일만 포함합니다.", tasks: summary.completedTasks },
     blocked: { title: "막힘 수의 근거 기록", description: "실행 기록에 실제 막힌 이유가 한 번이라도 남은 할 일입니다.", tasks: summary.blockedTasks },
     expected: { title: "예상 시간의 근거 기록", description: "각 할 일에 저장된 예상 시간의 합계입니다.", tasks: summary.tasks },
@@ -825,27 +831,9 @@ function renderSeeEvidence(summary) {
     return;
   }
 
-  list.innerHTML = selected.tasks.map((task) => {
-    const actualMinutes = actualMinutesForTask(task.id);
-    const gapMinutes = actualMinutes - Number(task.estimated_minutes || 0);
-    const blockers = blockerReasonsForTask(task.id);
-    const completed = isTaskCompletedToday(task);
-    return `
-      <article class="see-evidence-item">
-        <div class="see-evidence-main">
-          <strong>${escapeHTML(task.title)}</strong>
-          <span class="see-status ${completed ? "completed" : isOverdue(task) ? "overdue" : "active"}">${completed ? "완료" : isOverdue(task) ? "지연" : "진행 중"}</span>
-        </div>
-        <div class="see-evidence-values">
-          <span>마감 ${formatDate(task.due_date)}</span>
-          <span>예상 ${formatMinutes(task.estimated_minutes)}</span>
-          <span>실제 ${formatMinutes(actualMinutes)}</span>
-          <span>차이 ${formatSignedMinutes(gapMinutes)}</span>
-        </div>
-        ${blockers.length ? `<p><strong>막힘 이유</strong> · ${blockers.map(escapeHTML).join(" · ")}</p>` : ""}
-      </article>
-    `;
-  }).join("");
+  list.innerHTML = selected.tasks
+    .map((task) => `<article class="see-evidence-item"><strong>${escapeHTML(task.title)}</strong></article>`)
+    .join("");
 }
 
 function renderCompletionHistory(summary) {
@@ -907,7 +895,7 @@ function renderCompletionSummary() {
   $("#see-period-label").textContent = plan
     ? `${formatDate(plan.start_date)} – ${formatDate(plan.end_date)}`
     : "첫 계획을 세우면 집계 기간이 표시됩니다.";
-  $("#see-plan-count").textContent = summary.tasks.length;
+  $("#see-task-count").textContent = tasksForCurrentPlan(summary.tasks).length;
   $("#see-completion-count").textContent = summary.completedTasks.length;
   $("#see-overdue-count").textContent = state.missedDays.length;
   $("#see-blocked-count").textContent = summary.blockedTasks.length;

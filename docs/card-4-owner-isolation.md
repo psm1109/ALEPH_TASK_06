@@ -1,6 +1,6 @@
 # 카드 4 — 계정 간 자료 소유권 격리
 
-검사 시각: 2026-09-23 15:56:30 (Asia/Seoul)
+검사 시각: 2026-09-24 20:07:40 (Asia/Seoul)
 
 비밀번호, access token, refresh token은 이 문서와 저장소에 기록하지 않았다. 아래 `Authorization` 값은 모두 `[가림]`으로 표시한다.
 
@@ -10,8 +10,8 @@
 
 | 계정 | 이메일 | 사용자 ID | 생성한 자료 ID |
 | --- | --- | --- | --- |
-| A | `t07-a-1790146585388-6b4f32feb5@example.com` | `fe3d941b-fd81-4c03-adb6-42b24841463f` | `19`, `20` |
-| B | `t07-b-1790146585895-7ebed9ff32@example.com` | `6d14c972-3e26-41ab-9b82-b8de095d136e` | `21`, `22` |
+| A | `t07-a-1790248056579-9964c8ce1c@example.com` | `1a7584f0-fc31-489a-93cf-f268c34cdcc9` | `7`, `8` |
+| B | `t07-b-1790248057043-b468f6b061@example.com` | `7254bc2d-b18d-4e37-9624-f3aae4de932c` | `9`, `10` |
 
 비밀번호는 실행 중 메모리에서 무작위로 생성하고 인증 시도 직후 비웠으며, 출력하거나 파일에 저장하지 않았다.
 
@@ -28,7 +28,7 @@ Content-Type: application/json
 ### 읽기
 
 ```http
-GET https://eidvougocycgramikbwq.supabase.co/functions/v1/diary-data/tasks?id=eq.21&select=id,title,user_id
+GET https://eidvougocycgramikbwq.supabase.co/functions/v1/diary-data/tasks?id=eq.9&select=id,title,user_id
 ```
 
 ```http
@@ -41,7 +41,7 @@ Content-Type: application/json; charset=utf-8
 ### 수정
 
 ```http
-PATCH https://eidvougocycgramikbwq.supabase.co/functions/v1/diary-data/tasks?id=eq.21
+PATCH https://eidvougocycgramikbwq.supabase.co/functions/v1/diary-data/tasks?id=eq.9
 Prefer: return=representation
 
 {"title":"T07 unauthorized update by a"}
@@ -57,7 +57,7 @@ Content-Type: application/json; charset=utf-8
 ### 삭제
 
 ```http
-DELETE https://eidvougocycgramikbwq.supabase.co/functions/v1/diary-data/tasks?id=eq.21
+DELETE https://eidvougocycgramikbwq.supabase.co/functions/v1/diary-data/tasks?id=eq.9
 Prefer: return=representation
 ```
 
@@ -73,14 +73,14 @@ Content-Type: application/json; charset=utf-8
 다음 세 요청은 B 계정의 access token을 사용했다.
 
 ```http
-GET https://eidvougocycgramikbwq.supabase.co/functions/v1/diary-data/tasks?id=eq.19&select=id,title,user_id
+GET https://eidvougocycgramikbwq.supabase.co/functions/v1/diary-data/tasks?id=eq.7&select=id,title,user_id
 
-PATCH https://eidvougocycgramikbwq.supabase.co/functions/v1/diary-data/tasks?id=eq.19
+PATCH https://eidvougocycgramikbwq.supabase.co/functions/v1/diary-data/tasks?id=eq.7
 Prefer: return=representation
 
 {"title":"T07 unauthorized update by b"}
 
-DELETE https://eidvougocycgramikbwq.supabase.co/functions/v1/diary-data/tasks?id=eq.19
+DELETE https://eidvougocycgramikbwq.supabase.co/functions/v1/diary-data/tasks?id=eq.7
 Prefer: return=representation
 ```
 
@@ -102,7 +102,7 @@ Content-Type: application/json; charset=utf-8
 A 계정으로 다음 요청을 보냈다.
 
 ```http
-GET /functions/v1/diary-data/tasks?user_id=eq.6d14c972-3e26-41ab-9b82-b8de095d136e&select=id,title,user_id
+GET /functions/v1/diary-data/tasks?user_id=eq.7254bc2d-b18d-4e37-9624-f3aae4de932c&select=id,title,user_id
 ```
 
 ```http
@@ -119,15 +119,15 @@ A 계정 요청에 서버가 신뢰하지 않는 임의 헤더를 추가했다.
 
 ```http
 GET /functions/v1/diary-data/tasks?workspace_id=eq.pds-main&select=id,title,user_id
-X-User-Id: 6d14c972-3e26-41ab-9b82-b8de095d136e
+X-User-Id: 7254bc2d-b18d-4e37-9624-f3aae4de932c
 ```
 
 ```http
 HTTP/1.1 200 OK
 
 [
-  {"id":19,"title":"T07 a-1790146586177 자료 1","user_id":"fe3d941b-fd81-4c03-adb6-42b24841463f"},
-  {"id":20,"title":"T07 a-1790146586177 자료 2","user_id":"fe3d941b-fd81-4c03-adb6-42b24841463f"}
+  {"id":7,"title":"T07 a-1790248057305 자료 1","user_id":"1a7584f0-fc31-489a-93cf-f268c34cdcc9"},
+  {"id":8,"title":"T07 a-1790248057305 자료 2","user_id":"1a7584f0-fc31-489a-93cf-f268c34cdcc9"}
 ]
 ```
 
@@ -142,11 +142,11 @@ POST /functions/v1/diary-data/tasks?select=id,title,user_id
 Prefer: return=representation
 
 {
-  "user_id":"6d14c972-3e26-41ab-9b82-b8de095d136e",
+  "user_id":"7254bc2d-b18d-4e37-9624-f3aae4de932c",
   "workspace_id":"pds-main",
   "plan_version":1,
   "title":"T07 spoofed owner body",
-  "due_date":"2026-09-24",
+  "due_date":"2026-09-25",
   "priority":"low",
   "tags":["t07-owner-isolation"],
   "estimated_minutes":10
@@ -166,7 +166,7 @@ HTTP/1.1 403 Forbidden
 `Authorization` 헤더 없이 다음 요청을 보냈다.
 
 ```http
-GET /functions/v1/diary-data/tasks?id=eq.19&select=id,title,user_id
+GET /functions/v1/diary-data/tasks?id=eq.7&select=id,title,user_id
 ```
 
 ```http
@@ -182,7 +182,43 @@ HTTP/1.1 401 Unauthorized
 | 양방향 거절 전 | 2 | 2 |
 | 양방향 거절·스푸핑 뒤 | 2 | 2 |
 
-A의 최종 목록은 ID `19`, `20`만 포함했고 B의 ID `21`, `22`는 0건이었다. B의 최종 목록은 ID `21`, `22`만 포함했고 A의 ID `19`, `20`은 0건이었다. 양쪽 모두 상대 자료의 제목이 바뀌지 않았고, 삭제되지 않았으며, 본문 위조로 새 자료가 생기지 않았다.
+### A 계정의 최종 목록 요청과 응답
+
+```http
+GET https://eidvougocycgramikbwq.supabase.co/functions/v1/diary-data/tasks?workspace_id=eq.pds-main&select=id,title,user_id&order=id.asc
+Authorization: Bearer [가림]
+```
+
+```http
+HTTP/1.1 200 OK
+
+[
+  {"id":7,"title":"T07 a-1790248057305 자료 1","user_id":"1a7584f0-fc31-489a-93cf-f268c34cdcc9"},
+  {"id":8,"title":"T07 a-1790248057305 자료 2","user_id":"1a7584f0-fc31-489a-93cf-f268c34cdcc9"}
+]
+```
+
+A의 응답은 A의 `user_id`를 가진 ID `7`, `8`만 포함했다. B가 만든 ID `9`, `10`과 B의 `user_id`를 가진 행은 0건이었다.
+
+### B 계정의 최종 목록 요청과 응답
+
+```http
+GET https://eidvougocycgramikbwq.supabase.co/functions/v1/diary-data/tasks?workspace_id=eq.pds-main&select=id,title,user_id&order=id.asc
+Authorization: Bearer [가림]
+```
+
+```http
+HTTP/1.1 200 OK
+
+[
+  {"id":9,"title":"T07 b-1790248057888 자료 1","user_id":"7254bc2d-b18d-4e37-9624-f3aae4de932c"},
+  {"id":10,"title":"T07 b-1790248057888 자료 2","user_id":"7254bc2d-b18d-4e37-9624-f3aae4de932c"}
+]
+```
+
+B의 응답은 B의 `user_id`를 가진 ID `9`, `10`만 포함했다. A가 만든 ID `7`, `8`과 A의 `user_id`를 가진 행은 0건이었다.
+
+따라서 로그인된 각 계정으로 목록을 호출한 응답에는 다른 계정의 자료가 하나도 들어 있지 않다. 이 결론은 비로그인 요청의 `401 Unauthorized` 응답이 아니라, A·B 계정의 실제 `200 OK` 목록 응답 본문을 각각 대조해 확인했다. 양쪽 모두 상대 자료의 제목이 바뀌지 않았고, 삭제되지 않았으며, 본문 위조로 새 자료가 생기지 않았다.
 
 ## 거절을 만드는 소스 위치
 
