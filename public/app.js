@@ -963,8 +963,8 @@ function renderSeeEvidence(summary) {
         return `
           <details class="execution-date-group" open>
             <summary>
-              <span class="execution-date-heading"><strong>${formatExecutionDate(date)}</strong><small>일일 총 시간 차이</small></span>
-              <span class="execution-date-total">${formatSignedMinutes(dateGapMinutes)}</span>
+              <span class="execution-date-heading"><strong>${formatExecutionDate(date)}</strong></span>
+              <span class="execution-date-total">일일 총 시간 차이 ${formatSignedMinutes(dateGapMinutes)}</span>
             </summary>
             <div class="completion-date-list">${summary.tasks.map((task) => {
               const actualMinutes = actualMinutesForTaskOnDate(task.id, date);

@@ -84,5 +84,5 @@ test("예상 대비 차이는 실제에서 누적 예상을 빼고 날짜별 상
   assert.match(evidenceRenderer, /실제 \$\{formatMinutes\(actualMinutes\)\}/);
   assert.match(evidenceRenderer, /예상 \$\{formatMinutes\(expectedMinutes\)\}/);
   assert.match(evidenceRenderer, /차이 \$\{formatSignedMinutes\(actualMinutes - expectedMinutes\)\}/);
-  assert.match(evidenceRenderer, /일일 총 시간 차이/);
+  assert.match(evidenceRenderer, /<span class="execution-date-total">일일 총 시간 차이 \$\{formatSignedMinutes\(dateGapMinutes\)\}<\/span>/);
 });
