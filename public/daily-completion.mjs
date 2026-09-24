@@ -18,6 +18,17 @@ export function inclusiveISODateCount(startDate, endDate) {
   return Math.floor((end - start) / 86400000) + 1;
 }
 
+export function inclusiveISODates(startDate, endDate) {
+  const count = inclusiveISODateCount(startDate, endDate);
+  if (!count) return [];
+  const start = new Date(`${startDate}T00:00:00Z`);
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(start);
+    date.setUTCDate(start.getUTCDate() + index);
+    return date.toISOString().slice(0, 10);
+  });
+}
+
 export function isTaskCompletedToday(task, today = toSeoulISODate()) {
   return task.is_completed === true && toSeoulISODate(task.completed_at) === today;
 }

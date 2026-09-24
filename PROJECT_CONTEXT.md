@@ -6,8 +6,8 @@
 
 - 저장소: `psm1109/ALEPH_TASK_06`
 - 작업 브랜치: `codex/card-1-auth`
-- 현재 기준 커밋: `6838acf`
-- 예상 시간 계산 수정까지 원격에 반영되어 있으며, 작업 트리에는 아래 실제 시간 날짜별 집계 변경이 아직 커밋되지 않은 상태로 남아 있습니다.
+- 현재 기준 커밋: `c80bbad`
+- 실제 시간 날짜별 집계 변경까지 커밋되어 있으며, 작업 트리에는 아래 예상 대비 차이 날짜별 상세 변경이 아직 커밋되지 않은 상태로 남아 있습니다.
 - 원격 추적 브랜치: `origin/codex/card-1-auth`
 - 고정된 최종 T06 조상 커밋: `bab809b`
 - 현재 브랜치에는 병합 커밋 `59530ab`과 카드 1의 과거 커밋 두 개가 함께 있습니다. 앞으로는 현재 브랜치의 최신 파일과 HEAD를 기준으로 작업합니다.
@@ -545,6 +545,37 @@ git diff --check
 확인하지 않은 항목:
 
 - 요청에 따라 로그인 후 실제 시간의 날짜별 합계와 실행 완료 내역 화면은 확인하지 않았습니다.
+
+### 2026-09-24 예상 대비 차이의 날짜별 상세 표시
+
+- 예상 대비 차이는 돌아보기에 표시되는 실제 시간에서 계획 시작일부터 오늘까지의 누적 예상 시간을 뺀 값으로 계산합니다.
+- 근거 기록은 계획 시작일부터 오늘까지 날짜별 펼치기로 표시합니다.
+- 각 날짜 안의 모든 할 일에 실제 시간, 일일 예상 시간, `실제 − 예상` 차이를 표시합니다.
+- 날짜 제목에는 그날의 전체 실제 시간에서 일일 예상 시간 합계를 뺀 일일 총 시간 차이를 표시합니다.
+- 완료 수·지연 수·막힘 수·예상 시간·실제 시간의 기존 계산은 변경하지 않았습니다.
+
+관련 파일:
+
+- `public/daily-completion.mjs`
+- `public/app.js`
+- `public/index.html`
+- `tests/week-record-separation.test.cjs`
+- `tests/see-task-evidence.test.cjs`
+- `README.md`
+- `PROJECT_CONTEXT.md`
+
+실행한 검사:
+
+- `node tests\week-record-separation.test.cjs` — 12개 통과
+- `node tests\see-task-evidence.test.cjs` — 6개 통과
+- `tests`의 `*.test.cjs`, `*.test.mjs` 전체 Node 검사 — 35개 통과, 실패 0개
+- `node --check public\app.js` — 통과
+- `node --check public\daily-completion.mjs` — 통과
+- `git diff --check` — 통과(LF→CRLF 안내만 표시)
+
+확인하지 않은 항목:
+
+- 요청에 따라 로그인 후 예상 대비 차이와 날짜별 상세 화면은 확인하지 않았습니다.
 
 ## 아직 필요한 실제 확인
 

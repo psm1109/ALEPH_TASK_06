@@ -54,7 +54,7 @@ test("예상 시간은 일일 합계에 집계 시작일부터 오늘까지 일�
   assert.match(evidenceRenderer, /state\.seeEvidenceType === "expected"/);
   assert.match(evidenceRenderer, /escapeHTML\(task\.title\)/);
   assert.match(evidenceRenderer, /formatMinutes\(task\.estimated_minutes\)/);
-  assert.match(app, /gapMinutes: allActualMinutes - dailyExpectedMinutes/);
+  assert.match(app, /gapMinutes: actualMinutes - elapsedExpectedMinutes/);
 });
 
 test("실제 시간은 집계 기간의 실행 기록을 날짜별 완료 내역으로 표시한다", () => {
@@ -69,4 +69,20 @@ test("실제 시간은 집계 기간의 실행 기록을 날짜별 완료 내역
   assert.match(evidenceRenderer, /const dateTotal = logs\.reduce/);
   assert.match(evidenceRenderer, /taskTitle\(log\.task_id\)/);
   assert.match(evidenceRenderer, /formatMinutes\(log\.actual_minutes\)/);
+});
+
+test("예상 대비 차이는 실제에서 누적 예상을 빼고 날짜별 상세를 표시한다", () => {
+  const evidenceRenderer = app.slice(
+    app.indexOf("function renderSeeEvidence"),
+    app.indexOf("function renderCompletionHistory"),
+  );
+  assert.match(html, /data-see-evidence="gap"><span>예상 대비 차이<\/span>[\s\S]*?<small>날짜별 실제 − 예상<\/small>/);
+  assert.match(app, /gapMinutes: actualMinutes - elapsedExpectedMinutes/);
+  assert.match(app, /const gapDates = plan \? inclusiveISODates\(plan\.start_date, toSeoulISODate\(\)\) : \[\]/);
+  assert.match(evidenceRenderer, /state\.seeEvidenceType === "gap"/);
+  assert.match(evidenceRenderer, /const dateGapMinutes = dateActualMinutes - summary\.dailyExpectedMinutes/);
+  assert.match(evidenceRenderer, /실제 \$\{formatMinutes\(actualMinutes\)\}/);
+  assert.match(evidenceRenderer, /예상 \$\{formatMinutes\(expectedMinutes\)\}/);
+  assert.match(evidenceRenderer, /차이 \$\{formatSignedMinutes\(actualMinutes - expectedMinutes\)\}/);
+  assert.match(evidenceRenderer, /일일 총 시간 차이/);
 });

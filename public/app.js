@@ -6,6 +6,7 @@ import {
   completionRecordsFromExecutions,
   executionLogsInPeriod,
   inclusiveISODateCount,
+  inclusiveISODates,
   millisecondsUntilNextSeoulDay,
   taskHasExecutionForDate,
   taskNeedsDailyReset,
@@ -772,7 +773,7 @@ function getSeeSummary() {
     ? executionLogsInPeriod(state.taskExecutions, plan.start_date, plan.end_date)
     : [];
   const actualMinutes = periodExecutionLogs.reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0);
-  const allActualMinutes = state.taskExecutions.reduce((sum, log) => sum + Number(log.actual_minutes || 0), 0);
+  const gapDates = plan ? inclusiveISODates(plan.start_date, toSeoulISODate()) : [];
   return {
     tasks,
     completedTasks,
@@ -783,7 +784,8 @@ function getSeeSummary() {
     elapsedExpectedMinutes,
     periodExecutionLogs,
     actualMinutes,
-    gapMinutes: allActualMinutes - dailyExpectedMinutes,
+    gapDates,
+    gapMinutes: actualMinutes - elapsedExpectedMinutes,
   };
 }
 
@@ -947,10 +949,46 @@ function renderSeeEvidence(summary) {
       : '<div class="task-empty"><strong>집계 기간의 실행 완료 내역이 없어요</strong></div>';
     return;
   }
+  if (state.seeEvidenceType === "gap") {
+    $$("#see-metrics [data-see-evidence]").forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.seeEvidence === "gap");
+    });
+    $("#see-evidence-title").textContent = "예상 대비 차이의 근거 기록";
+    $("#see-evidence-description").textContent = "날짜별 각 할 일의 실제 시간에서 일일 예상 시간을 뺀 값입니다.";
+    $("#see-evidence-count").textContent = `${summary.gapDates.length}일`;
+    $("#see-evidence-list").innerHTML = summary.gapDates.length && summary.tasks.length
+      ? [...summary.gapDates].reverse().map((date) => {
+        const dateActualMinutes = summary.tasks.reduce((sum, task) => sum + actualMinutesForTaskOnDate(task.id, date), 0);
+        const dateGapMinutes = dateActualMinutes - summary.dailyExpectedMinutes;
+        return `
+          <details class="execution-date-group" open>
+            <summary>
+              <span class="execution-date-heading"><strong>${formatExecutionDate(date)}</strong><small>일일 총 시간 차이</small></span>
+              <span class="execution-date-total">${formatSignedMinutes(dateGapMinutes)}</span>
+            </summary>
+            <div class="completion-date-list">${summary.tasks.map((task) => {
+              const actualMinutes = actualMinutesForTaskOnDate(task.id, date);
+              const expectedMinutes = Number(task.estimated_minutes || 0);
+              return `
+                <article class="completion-task-card">
+                  <div><strong>${escapeHTML(task.title)}</strong></div>
+                  <div class="completion-task-times">
+                    <span>실제 ${formatMinutes(actualMinutes)}</span>
+                    <span>예상 ${formatMinutes(expectedMinutes)}</span>
+                    <strong>차이 ${formatSignedMinutes(actualMinutes - expectedMinutes)}</strong>
+                  </div>
+                </article>
+              `;
+            }).join("")}</div>
+          </details>
+        `;
+      }).join("")
+      : '<div class="task-empty"><strong>시간 차이를 계산할 기록이 없어요</strong></div>';
+    return;
+  }
   const currentPlanTasks = tasksForCurrentPlan(summary.tasks);
   const definitions = {
     planned: { title: "할 일 수의 근거 기록", description: "현재 계획에 연결된, 삭제되지 않은 할 일입니다.", tasks: currentPlanTasks },
-    gap: { title: "예상 대비 차이의 근거 기록", description: "할 일별 실제 시간에서 예상 시간을 뺀 값입니다.", tasks: summary.tasks },
   };
   const selected = definitions[state.seeEvidenceType] || definitions.planned;
   $("#see-evidence-title").textContent = selected.title;

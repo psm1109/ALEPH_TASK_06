@@ -12,13 +12,18 @@ async function dailyCompletion() {
 }
 
 test("서울 자정을 기준으로 날짜를 구분한다", async () => {
-  const { toSeoulISODate, millisecondsUntilNextSeoulDay, inclusiveISODateCount } = await dailyCompletion();
+  const {
+    toSeoulISODate, millisecondsUntilNextSeoulDay, inclusiveISODateCount, inclusiveISODates,
+  } = await dailyCompletion();
   assert.equal(toSeoulISODate("2026-09-23T14:59:59.000Z"), "2026-09-23");
   assert.equal(toSeoulISODate("2026-09-23T15:00:00.000Z"), "2026-09-24");
   assert.equal(millisecondsUntilNextSeoulDay(new Date("2026-09-23T14:59:59.000Z")), 1100);
   assert.equal(inclusiveISODateCount("2026-09-21", "2026-09-24"), 4);
   assert.equal(inclusiveISODateCount("2026-09-24", "2026-09-24"), 1);
   assert.equal(inclusiveISODateCount("2026-09-25", "2026-09-24"), 0);
+  assert.deepEqual(inclusiveISODates("2026-09-21", "2026-09-24"), [
+    "2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24",
+  ]);
 });
 
 test("오늘 완료한 할 일만 체크 상태이며 다음 날 초기화 대상이 된다", async () => {
