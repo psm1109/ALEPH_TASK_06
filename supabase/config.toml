@@ -3,3 +3,6 @@ verify_jwt = false
 
 [functions.diary-data]
 verify_jwt = false
+
+[functions.account-delete]
+verify_jwt = false

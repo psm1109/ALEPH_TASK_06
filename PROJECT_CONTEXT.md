@@ -1,6 +1,6 @@
 # PDS Diary 프로젝트 인계 문서
 
-마지막 수정: 2026-09-24 (Asia/Seoul)
+마지막 수정: 2026-09-26 (Asia/Seoul)
 
 ## Git 상태
 
@@ -624,6 +624,100 @@ git diff --check
 - 제출 증거에서는 위 값을 `[가림]`으로 바꾸거나, 평가 기준이 허용하는 경우에만 비밀이 아닌 짧은 표시로 바꿉니다.
 - `auth.users.encrypted_password`는 권한이 있는 Supabase 관리 화면에서만 확인하고 카드 2의 요구된 해시 증거를 만드는 용도로만 사용합니다.
 
-## 다음 작업
+## 2026-09-24 카드 5 설명서·계정 수명주기 1차 작업
 
-카드 4 운영 API 검증과 제출문은 완료했습니다. 다음에는 변경을 커밋한 뒤 사용자 승인에 따라 원격에 올리고 Vercel 정적 앱을 재배포하여 실제 화면의 자료 생성·수정·삭제 회귀를 확인합니다. 카드 2의 로그인 Payload·응답·Console·Edge Function 로그 원문 0건 검증도 남아 있습니다.
+- 완료: `docs/card-5-auth-guide-and-five-day-use.md`에 인증 구현 설명서 여섯 항목, 네 흐름의 소스 위치, 성공·거절 요청 표, 무차별 대입 미방어 위험, 질문·지표·단위·계산 규칙, 5일 기록표와 T06 연결을 작성했습니다.
+- 완료: 전체 JSON 내보내기 경로를 카드 5 문서와 계약서에 연결했습니다.
+- 완료: `account-delete` Edge Function, 로그인 후 `계정 삭제` 버튼, 계정 삭제 확인 문구를 추가했습니다. Auth 사용자 삭제 후 `on delete cascade`로 연결 자료가 삭제되도록 기존 스키마 경계를 사용합니다.
+- 현재 브랜치/커밋: `codex/card-1-auth` / `a593eed` 기준이며 이번 변경은 아직 커밋하지 않았습니다.
+- 고정 T06 조상: `bab809b`; `git merge-base --is-ancestor bab809b HEAD` 통과.
+
+관련 파일:
+
+- `docs/card-5-auth-guide-and-five-day-use.md`
+- `public/index.html`, `public/app.js`, `public/styles.css`
+- `supabase/functions/account-delete/index.ts`, `supabase/config.toml`
+- `contracts/pds-schema-v2.json`, `README.md`
+- `tests/card5-account-lifecycle.test.cjs`
+
+실행한 검사:
+
+- `node --check public/app.js` — 통과
+- `node tests/card5-account-lifecycle.test.cjs` — 8개 통과
+- 카드 1~4·암호화·응답·집계 관련 기존 Node 검사 — 통과
+- `node --check scripts/card3-browser-evidence.js` — 통과
+- 계약 JSON 파싱 — 통과
+- `git diff --check` — 통과(LF→CRLF 안내만 표시)
+
+아직 확인하지 못한 항목:
+
+- 실제 Supabase에 새 `account-delete` 함수를 배포하고 계정 삭제 후 Auth·자료 삭제를 브라우저에서 확인하지 않았습니다.
+- 2026-09-24 당시에는 서로 다른 Asia/Seoul 실제 날짜 5일의 사용자 기록, 규칙 변경 시각·이유, 화면 합계와 손계산 대조가 아직 없었습니다. 5일 기록과 합계 대조는 아래 2026-09-26 항목에서 확인했습니다.
+- 카드 2의 운영 bcrypt 결과와 인증 Payload·응답·Console·Edge Function 로그 원문 0건 확인은 여전히 운영 검증 전입니다.
+
+다음 단계:
+
+1. `supabase functions deploy account-delete --project-ref [가림]`를 비밀값을 출력하지 않는 환경에서 실행하고, 정적 앱을 재배포합니다.
+2. 별도 시험 계정에서 내보내기 후 `계정 삭제`를 실행하고, 재로그인 거절과 연결 자료 삭제를 가린 응답으로 기록합니다.
+3. 2일차 기록 뒤·3일차 기록 앞에 실제로 규칙을 바꿨는지와 정확한 시각·이유를 확인합니다. 확인할 수 없다면 현재 5일을 변경 전·후 증거로 사용하지 않습니다.
+4. 규칙 변경 사실이 확인되면 변경 전 2일 평균과 변경 후 3일 평균을 같은 분/일 규칙으로 계산합니다.
+
+## 2026-09-26 카드 5 실제 5일 기록 합계 확인
+
+- 운영 배포 앱에 로그인한 상태에서 `See > 실제 시간`의 날짜별 근거 기록을 읽기 전용으로 확인했습니다.
+- 서로 다른 날짜는 2026.09.21~2026.09.25의 5일이며 실행 기록은 총 14건입니다.
+- 날짜별 손계산은 9/21 `12+42+38=92분`, 9/22 `18+55+48=121분`, 9/23 `17+62+45=124분`, 9/24 `16+53+42=111분`, 9/25 `26+49=75분`입니다.
+- 총합 `523분=8시간 43분`이 화면의 실제 시간 `8시간 43분`과 일치했고, 5일 전체 평균은 `104.6분/일`입니다.
+- `docs/card-5-auth-guide-and-five-day-use.md`에 위 검증값과 일평균 반올림 규칙을 반영했습니다.
+
+확인하지 못한 항목:
+
+- 사용자는 2일차 기록 뒤·3일차 기록 앞에 규칙을 실제로 바꿨지만 당시 변경 기록을 남기지 못했다고 2026.09.26에 바로잡았습니다. 사후 기록에는 실제 변경 시각과 사후 작성 시각을 구분하고, 기억나지 않는 시각을 임의로 만들지 않습니다.
+- 변경 전 규칙은 `그날 가능한 할 일을 별도 최우선 항목 없이 진행한다`, 변경 후 규칙은 `하루 시작 전에 가장 중요한 할 일 하나를 정하고 그 일을 가장 먼저 진행한다`로 정했습니다. 기록 방식은 유지하고 우선순위 선택 규칙 하나만 변경합니다.
+- 이유는 제한된 학습 시간을 CCNA 핵심 학습에 먼저 사용하고 집중 분산을 줄이기 위해서입니다.
+- 변경 전 평균은 `106.5분/일`, 변경 후 평균은 `103.3분/일`로 같은 단위와 계산 규칙을 적용했으며, 변경 후 `3.2분/일` 감소한 결과를 그대로 기록했습니다.
+- 제출문에는 3일차 적용 시작 기준인 `2026.09.23 00:00 (Asia/Seoul)`을 규칙 변경 적용 시각으로 표시했습니다.
+- 제출문에서 과정 설명을 줄이고 AI에게 맡긴 일·직접 판단한 일·따르지 않은 제안, 네 항목의 짧은 확인 방법, 5일 수치와 전후 비교를 통과 기준에 맞춰 분리했습니다.
+- 앱의 계획 변경 이력에는 2026.09.24의 계획 수정만 표시되므로, 이것만으로 2026.09.22 기록 뒤·2026.09.23 기록 앞의 규칙 변경을 증명할 수 없습니다.
+- 내보내기 JSON 생성과 운영 계정 삭제 확인은 실행하지 않았습니다.
+
+다음 단계:
+
+1. 사용자가 기억하는 실제 규칙 변경 시각과 변경 이유를 확인합니다.
+2. `실제 변경 시각`, `사후 작성 시각`, 변경 전 규칙, 변경 후 규칙, 이유를 카드 5 문서에 구분해 기록합니다.
+3. 원래 실행 기록 값에 실제 입력 오류가 있다면 사용자가 알려 준 사실값만 수정하고, 제출 기준에 맞추기 위한 임의 변경은 하지 않습니다.
+4. 9/21~9/22 평균과 9/23~9/25 평균을 같은 `분/일` 규칙으로 계산합니다.
+
+## 2026-09-26 카드 5 계정과 연결 자료 삭제 구현
+
+- 로그인한 사용자의 access token을 `account-delete` Edge Function이 다시 검증하고, token에서 확인한 현재 Auth 사용자만 삭제하도록 구현했습니다. 주소·헤더·본문으로 전달되는 임의 사용자 ID는 사용하지 않습니다.
+- Auth 사용자 삭제 시 `plan_versions`, `tasks`, `task_execution_logs`, `task_completion_events`, `task_missed_days`, `reflections`의 해당 사용자 자료가 `on delete cascade`로 함께 삭제됩니다.
+- 신규 DB용 `supabase/schema.sql`의 연쇄 삭제 외래키를 확인했고, 기존 운영 DB의 여섯 외래키를 보강하는 `supabase/card5-account-delete-cascade.sql`을 추가했습니다.
+- 계정 영역에서 내보내기·로그아웃과 계정 삭제를 분리했습니다. 위험 구역에는 계정을 삭제하면 데이터베이스의 계획·할 일·실행·완료·지연·회고 자료도 함께 삭제되고 복구할 수 없다는 안내를 항상 표시합니다.
+- 삭제 전 브라우저 재확인, 처리 중 버튼 비활성화, 성공 후 로그인 화면 전환, 실패 시 자료가 변경되지 않았다는 안내를 유지했습니다.
+
+관련 파일:
+
+- `public/index.html`
+- `public/styles.css`
+- `public/app.js`
+- `supabase/functions/account-delete/index.ts`
+- `supabase/card5-account-delete-cascade.sql`
+- `supabase/config.toml`
+- `tests/card5-account-lifecycle.test.cjs`
+- `contracts/pds-schema-v2.json`
+- `README.md`
+
+실행한 검사:
+
+- `node tests\card5-account-lifecycle.test.cjs` — 20개 통과
+- `tests`의 `*.test.cjs`, `*.test.mjs` 전체 Node 검사 — 10개 파일 통과, 실패 0개
+- `node --check public\app.js` — 통과
+- 현재 작업 트리 private secret 패턴 검사 — 발견 0건
+- `git diff --check` — 통과(LF→CRLF 안내만 표시)
+
+아직 확인하지 않은 항목:
+
+- `supabase/card5-account-delete-cascade.sql`은 운영 Supabase에 아직 실행하지 않았습니다.
+- `account-delete` Edge Function과 새 정적 화면은 아직 운영 배포하지 않았습니다.
+- 실제 삭제 검증은 주 사용 계정이 아닌 별도 시험 계정으로 내보내기 후 수행해야 합니다.

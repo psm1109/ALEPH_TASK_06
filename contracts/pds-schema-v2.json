@@ -169,6 +169,11 @@
     "data_collections": ["plan_versions", "tasks", "task_execution_logs", "task_completion_events", "task_missed_days", "reflections"],
     "excludes": ["Supabase URL", "publishable key", "secret key", "authorization headers"]
   },
+  "account_lifecycle": {
+    "export": "The authenticated user can download all listed collections as one JSON file.",
+    "delete": "The authenticated account-delete function removes the Auth user; diary rows reference auth.users with on delete cascade.",
+    "operational_evidence": "A deployed browser check is required before claiming account deletion is verified."
+  },
   "security": {
     "authentication_service": "Supabase Auth",
     "client_library": "@supabase/supabase-js 2.116.0",

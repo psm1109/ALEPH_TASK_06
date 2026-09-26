@@ -63,6 +63,8 @@
 - 날짜별 미완료 기록은 DB에 저장되고 다음 접속 시 비어 있던 지난 날짜를 보충합니다. 할 일을 삭제하면 연결된 미완료 기록도 함께 삭제됩니다.
 - 화면 상단의 `전체 자료 내보내기`를 누르면 최신 서버 자료를 JSON 파일 하나로 내려받습니다.
 - 내보내기 파일에는 설정 URL, Publishable key, 인증 헤더가 포함되지 않습니다.
+- 계정 영역의 위험 구역에는 계정을 삭제하면 데이터베이스의 계획·할 일·실행·완료·지연·회고 자료도 함께 삭제되며 복구할 수 없다는 안내가 항상 표시됩니다.
+- `계정 삭제`를 누르면 재확인 후 인증된 본인 계정만 삭제하고, `on delete cascade`로 연결된 자료도 함께 삭제합니다. 삭제 전 JSON 내보내기를 권장합니다.
 - 날짜 표시와 오늘·지연 판정은 `Asia/Seoul`을 기준으로 합니다.
 
 최종 데이터 표, 항목, 관계, 날짜·단위 규칙은 [`contracts/pds-schema-v2.json`](contracts/pds-schema-v2.json)에 정의되어 있습니다.
@@ -135,9 +137,11 @@ python -m http.server 4173 --directory public
 │  ├─ config.toml      # Edge Function 공개 호출 설정
 │  ├─ functions/auth-gateway/index.ts # 암호화된 인증 요청 중계
 │  ├─ functions/diary-data/index.ts # 단건 소유자 확인 및 Data API 중계
+│  ├─ functions/account-delete/index.ts # 인증된 계정과 연결 자료 삭제
 │  ├─ schema.sql       # 사용자 소유권 열, RLS, 날짜별 완료 기록
 │  ├─ daily-completion.sql # 기존 DB의 날짜별 완료 기록 전환
 │  ├─ daily-missed-days.sql # 기존 DB의 날짜별 미완료 기록 테이블 추가
+│  ├─ card5-account-delete-cascade.sql # 기존 운영 DB의 사용자 외래키를 연쇄 삭제로 보강
 │  ├─ card3-session-revocation.sql # 기존 운영 DB용 즉시 세션 폐기 증분 SQL
 │  └─ card1-migrate-existing-data.sql # 기존 pds-main 자료 소유자 이관
 └─ contracts/
@@ -155,6 +159,7 @@ python -m http.server 4173 --directory public
 - 새로고침 후에도 저장된 자료와 집계가 유지됩니다.
 - Plan에서는 계획과 할 일, Do에서는 연결된 실행 기록, See에서는 집계 근거와 회고가 표시됩니다.
 - `전체 자료 내보내기`를 누르면 `pds-diary-<workspace>-YYYY-MM-DD.json` 파일이 생성됩니다.
+- `계정 삭제`는 확인 문구를 거친 뒤 계정과 연결 자료를 삭제하고 로그인 화면으로 돌아갑니다. 실제 운영 확인 전에는 완료로 판정하지 않습니다.
 
 연결 정보가 없거나 요청에 실패하면 `Supabase 설정 누락` 또는 `Supabase 연결 실패` 상태와 오류 안내가 표시됩니다. 계획이나 기록이 없을 때는 각 영역에 다음 행동을 알려 주는 빈 상태 안내가 나타납니다.
 
@@ -166,6 +171,7 @@ node tests/card2-password.test.cjs
 node tests/auth-crypto.test.mjs
 node tests/card3-session.test.cjs
 node --check scripts/card3-browser-evidence.js
+node tests/card5-account-lifecycle.test.cjs
 ```
 
 배포 후 개발자 도구에서 로그인 요청을 확인할 때 `auth-gateway` POST의 Payload에는 `mode`, `encrypted_key`, `iv`, `ciphertext`만 있어야 합니다. `password` 필드나 입력한 비밀번호 원문이 보이면 통과로 판정하지 않습니다. Response·Console·화면과 Supabase Edge Function 로그에도 원문이 없어야 합니다.
