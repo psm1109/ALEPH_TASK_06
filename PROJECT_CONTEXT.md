@@ -6,8 +6,8 @@
 
 - 저장소: `psm1109/ALEPH_TASK_06`
 - 작업 브랜치: `codex/card-1-auth`
-- 현재 기준 커밋: `d003e39`
-- 계정 관리 펼침 메뉴와 삭제 이중 확인 UI까지 커밋되어 있습니다. 이번 Rate Limit·Turnstile 작업은 아직 커밋하지 않았습니다.
+- 현재 기능 기준 커밋: `e130faf`
+- Rate Limit 운영 조정 기록과 Turnstile 연동 코드·테스트·문서를 `e130faf`로 커밋해 `origin/codex/card-1-auth`에 푸시했습니다.
 - 원격 추적 브랜치: `origin/codex/card-1-auth`
 - 고정된 최종 T06 조상 커밋: `bab809b`
 - 현재 브랜치에는 병합 커밋 `59530ab`과 카드 1의 과거 커밋 두 개가 함께 있습니다. 앞으로는 현재 브랜치의 최신 파일과 HEAD를 기준으로 작업합니다.
@@ -833,8 +833,14 @@ git diff --check
 안전한 다음 순서:
 
 1. 전체 정적 검사를 다시 실행합니다.
-2. 변경을 검토한 뒤 사용자가 커밋·푸시하고 Vercel 정적 앱을 먼저 배포합니다.
+2. 커밋 `e130faf`가 반영된 Vercel 정적 앱을 먼저 배포하고 실제 Turnstile 위젯이 표시되는지 확인합니다.
 3. 최신 `auth-gateway`를 운영 Supabase에 배포합니다.
 4. Cloudflare에서 첫 Secret을 회전합니다.
 5. 새 Secret을 값이 보이지 않게 Supabase CAPTCHA 설정으로 옮기고 Turnstile을 활성화합니다.
 6. 운영 로그인·가입 성공, 토큰 없는 직접 Auth 요청 거절, Payload·Response·Console·Edge Function 로그의 비밀번호 원문 0건을 확인합니다.
+
+커밋·푸시 결과:
+
+- 기능 커밋: `e130faf` (`feat: 로그인과 가입에 Turnstile CAPTCHA 보호 추가`)
+- 원격 반영: `origin/codex/card-1-auth`에 푸시 완료
+- 커밋 직전 전체 Node 검사: 11개 파일, 총 169개 통과, 실패 0개
