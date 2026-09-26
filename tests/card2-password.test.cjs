@@ -19,7 +19,7 @@ assert.match(app, /import \{ encryptAuthCredentials \} from "\.\/auth-crypto\.mj
 assert.match(authCrypto, /AES-GCM/);
 assert.match(authCrypto, /RSA-OAEP/);
 assert.doesNotMatch(authCrypto, /console\.(?:log|debug|info|warn|error)\(/);
-assert.match(app, /JSON\.stringify\(\{ mode, \.\.\.encrypted \}\)/);
+assert.match(app, /JSON\.stringify\(\{ mode, captcha_token: captchaToken, \.\.\.encrypted \}\)/);
 assert.doesNotMatch(app, /JSON\.stringify\(\{[^}]*password[^}]*\}\)[^;]*fetch/s);
 assert.match(app, /loginForm\.elements\.password\.value = ""/);
 assert.match(app, /signupForm\.elements\.password\.value = ""/);

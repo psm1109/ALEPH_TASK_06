@@ -41,6 +41,7 @@
         <form id="login-form" class="auth-form" novalidate>
           <label>이메일<input name="email" type="email" autocomplete="email" required placeholder="name@example.com" /></label>
           <label>비밀번호<input name="password" type="password" autocomplete="current-password" required /></label>
+          <div id="login-captcha" class="auth-captcha" aria-label="로그인 자동화 방지 확인"></div>
           <button class="button primary" type="submit">로그인</button>
         </form>
 
@@ -49,6 +50,7 @@
           <label>비밀번호<input name="password" type="password" autocomplete="new-password" minlength="8" required /></label>
           <label>비밀번호 확인<input name="password_confirm" type="password" autocomplete="new-password" minlength="8" required /></label>
           <p class="auth-help">8자 이상으로 입력하세요. 비밀번호 원문은 다이어리 데이터베이스나 화면에 저장하지 않습니다.</p>
+          <div id="signup-captcha" class="auth-captcha" aria-label="가입 자동화 방지 확인"></div>
           <button class="button primary" type="submit">계정 만들기</button>
         </form>
       </div>

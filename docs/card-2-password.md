@@ -15,7 +15,7 @@ bcrypt는 비밀번호 저장을 위해 널리 사용되는 느린 해시 함수
 ## 3. 저장 위치와 코드 경계
 
 - 비밀번호 원문 입력: `public/index.html`의 `type="password"` 입력칸
-- 가입·로그인 전달: `public/app.js`에서 자격 증명을 AES-256-GCM으로 암호화하고 AES 키를 RSA-OAEP-256으로 감싼 뒤 `auth-gateway`에 전달
+- 가입·로그인 전달: `public/app.js`에서 자격 증명을 AES-256-GCM으로 암호화하고 AES 키를 RSA-OAEP-256으로 감싼 뒤 일회용 Turnstile 토큰과 함께 `auth-gateway`에 전달
 - 서버 중계: `supabase/functions/auth-gateway/index.ts`가 메모리에서만 복호화해 Supabase Auth에 전달하고 요청·응답 본문을 기록하지 않음
 - 저장과 검증: Supabase Auth 서비스
 - 저장된 해시 위치: Supabase 내부 `auth.users.encrypted_password`
@@ -75,9 +75,10 @@ Edge Function 배포 후 개발자 도구에서 원문을 복사하지 않고 �
 
 ```text
 요청: POST /functions/v1/auth-gateway
-요청 본문 필드: mode, encrypted_key, iv, ciphertext
+요청 본문 필드: mode, captcha_token, encrypted_key, iv, ciphertext
 요청 본문의 password 필드: 없음
 요청 본문의 비밀번호 원문 검색: 0건
+captcha_token 원문 제출 기록: 0건
 응답: [실제 상태 코드]
 응답 본문 검사: password 필드와 비밀번호 원문 없음 [실행 전]
 화면 검사: 비밀번호 원문 표시 없음 [실행 전]

@@ -99,6 +99,8 @@ Deno.serve(async (request) => {
     const body = await request.json();
     const mode = body.mode === "signup" ? "signup" : body.mode === "login" ? "login" : "";
     if (!mode) return json({ error: "Invalid request" }, 400);
+    const captchaToken = String(body.captcha_token || "");
+    if (!captchaToken) return json({ error: "Authentication failed" }, 400);
 
     const credentials = await decryptCredentials(body, privateJwk);
     if (!credentials.email || !credentials.password) return json({ error: "Invalid request" }, 400);
@@ -112,7 +114,10 @@ Deno.serve(async (request) => {
       upstream = await fetch(`${supabaseUrl}${authPath}`, {
         method: "POST",
         headers: { apikey: anonKey, "Content-Type": "application/json" },
-        body: JSON.stringify(credentials),
+        body: JSON.stringify({
+          ...credentials,
+          gotrue_meta_security: { captcha_token: captchaToken },
+        }),
       });
     } finally {
       credentials.password = "";

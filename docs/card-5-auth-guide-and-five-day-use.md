@@ -51,7 +51,7 @@
 
 ## ⑥ 아직 못 막은 것
 
-무차별 대입은 아직 못 막았다. 로그인 실패 횟수 제한, IP·계정별 rate limit, CAPTCHA, 추가 잠금 정책을 이 앱의 `auth-gateway`에 구현하지 않았기 때문이다. 공격자가 많은 비밀번호를 반복 시도하면 계정 추측과 서비스 자원 소모 위험이 남는다. Supabase Auth의 운영 rate limit과 별도 WAF·CAPTCHA 설정을 확인하고 추가해야 한다.
+운영 Supabase의 로그인·가입 Rate Limit은 IP당 10 requests/5 min으로 낮췄고, Cloudflare Turnstile 토큰을 `auth-gateway`가 Supabase Auth에 전달하는 코드를 준비했다. 다만 새 정적 앱과 Edge Function 배포, Supabase CAPTCHA 활성화, 운영 로그인 검증 전에는 CAPTCHA 방어가 적용됐다고 판정하지 않는다. 무료 플랜에서는 계정 단위 Password Verification Hook을 쓸 수 없으므로 이후 점진적 지연과 임시 제한은 게이트웨이 보조 방어로 별도 구현해야 하며, Supabase Auth 직접 호출에는 Rate Limit과 CAPTCHA가 주 방어선이다.
 
 ## 1일차에 고정한 질문과 지표
 

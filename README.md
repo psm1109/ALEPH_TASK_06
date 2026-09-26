@@ -9,7 +9,9 @@
 - Supabase Auth 이메일·비밀번호 방식으로 가입, 로그인, 로그아웃합니다.
 - 브라우저 라이브러리는 `@supabase/supabase-js` `2.116.0`으로 고정했습니다.
 - 로그인·가입 자격 증명은 Web Crypto의 AES-256-GCM으로 암호화하고, 일회용 AES 키는 RSA-OAEP-256으로 다시 암호화해 `auth-gateway` Edge Function에 전달합니다.
-- 브라우저 네트워크 요청에는 이메일·비밀번호 필드 대신 `encrypted_key`, `iv`, `ciphertext`만 남습니다.
+- 브라우저 네트워크 요청에는 이메일·비밀번호 필드 대신 일회용 `captcha_token`과 `encrypted_key`, `iv`, `ciphertext`만 남습니다.
+- Cloudflare Turnstile의 관리형 위젯이 로그인·가입마다 일회용 토큰을 만들고, Supabase Auth가 Secret key로 토큰을 검증합니다.
+- 운영 Supabase의 로그인·가입 Rate Limit은 IP당 10 requests/5 min으로 설정했습니다.
 - 로그인하지 않은 상태에서는 URL의 `#plan`, `#do`, `#see`, `#history`를 직접 열어도 다이어리 대신 로그인 화면이 나옵니다.
 - 모든 자료 요청은 세션 access token을 `Authorization` 헤더로 보내며 URL에는 싣지 않습니다.
 - 각 자료 행의 `user_id`가 서버의 `auth.uid()`와 같은지는 PostgreSQL RLS가 검사합니다.
@@ -76,7 +78,7 @@
    기존 카드 1 스키마가 이미 적용된 프로젝트에는 [`supabase/session-revocation.sql`](supabase/session-revocation.sql)만 실행해 카드 3 변경을 증분 적용할 수 있습니다.
    기존 PDS Diary 데이터베이스에는 [`supabase/daily-completion.sql`](supabase/daily-completion.sql)과 [`supabase/daily-missed-days.sql`](supabase/daily-missed-days.sql)을 추가로 실행합니다. 이전 버전의 완료 SQL을 이미 실행했다면 새 내용을 다시 실행합니다. 오늘 체크를 풀었던 기존 완료 이벤트는 정리하고, 이전 날짜의 이벤트와 실행 기록은 보존합니다. 과거에 저장되지 못한 완료 날짜는 복구할 수 없습니다.
 2. Supabase Authentication의 Email provider를 활성화합니다. 과제 확인 중 가입 직후 로그인해야 한다면 Confirm email을 끕니다.
-3. [`public/config.js`](public/config.js)에 Project URL과 `sb_publishable_...` 형식의 Publishable key를 설정합니다.
+3. [`public/config.js`](public/config.js)에 Project URL, `sb_publishable_...` 형식의 Publishable key, 공개 가능한 Turnstile Site key를 설정합니다.
 4. 가입 화면에서 기존 자료를 소유할 본인 계정을 만듭니다.
 5. [`supabase/migrate-existing-data.sql`](supabase/migrate-existing-data.sql)의 `OWNER_EMAIL@example.com` 두 곳을 그 계정 이메일로 바꿔 SQL Editor에서 한 번 실행합니다.
 6. 아래의 인증 게이트웨이 설정을 완료합니다.
@@ -102,10 +104,21 @@ supabase functions deploy auth-gateway --project-ref YOUR_PROJECT_REF
 window.__PDS_CONFIG__ = {
   supabaseUrl: "https://YOUR_PROJECT.supabase.co",
   supabasePublishableKey: "sb_publishable_YOUR_KEY",
+  turnstileSiteKey: "YOUR_PUBLIC_TURNSTILE_SITE_KEY",
 };
 ```
 
 웹페이지에는 Supabase 설정 입력 화면이 없습니다. Publishable key는 공개 식별자이며 자료 접근 권한을 부여하는 비밀키가 아닙니다. `schema.sql`은 `anon` 역할의 다이어리 권한을 제거하고, 로그인한 계정과 행의 `user_id`가 일치할 때만 자료를 허용합니다. `sb_secret_...`, `service_role`, JWT 비밀값은 브라우저 코드나 Git에 넣으면 안 됩니다.
+
+### CAPTCHA 배포 순서
+
+1. Cloudflare Turnstile 위젯에 운영 호스트를 등록하고 관리형 모드를 선택합니다.
+2. 공개 Site key만 `public/config.js`에 기록합니다. Secret key는 코드·문서·로그에 기록하지 않습니다.
+3. CAPTCHA 화면과 토큰 전달 코드가 포함된 정적 앱을 먼저 배포합니다.
+4. `captcha_token`을 Supabase Auth의 `gotrue_meta_security.captcha_token`으로 전달하는 최신 `auth-gateway`를 배포합니다.
+5. 마지막으로 Supabase Authentication > Attack Protection에서 Turnstile을 선택하고 Secret key를 직접 입력해 CAPTCHA를 활성화합니다.
+
+이 순서를 바꾸어 Supabase CAPTCHA부터 켜면 아직 토큰을 보내지 않는 배포 앱의 로그인·가입이 모두 실패할 수 있습니다. Turnstile Secret key가 노출됐다면 Cloudflare에서 회전한 뒤 Supabase에도 새 값만 입력합니다.
 
 ## 로컬 실행
 
@@ -171,11 +184,12 @@ python -m http.server 4173 --directory public
 node tests/card1-static.test.cjs
 node tests/card2-password.test.cjs
 node tests/auth-crypto.test.mjs
+node tests/auth-captcha.test.cjs
 node tests/card3-session.test.cjs
 node --check scripts/card3-browser-evidence.js
 node tests/card5-account-lifecycle.test.cjs
 ```
 
-배포 후 개발자 도구에서 로그인 요청을 확인할 때 `auth-gateway` POST의 Payload에는 `mode`, `encrypted_key`, `iv`, `ciphertext`만 있어야 합니다. `password` 필드나 입력한 비밀번호 원문이 보이면 통과로 판정하지 않습니다. Response·Console·화면과 Supabase Edge Function 로그에도 원문이 없어야 합니다.
+배포 후 개발자 도구에서 로그인 요청을 확인할 때 `auth-gateway` POST의 Payload에는 `mode`, `captcha_token`, `encrypted_key`, `iv`, `ciphertext`만 있어야 합니다. `password` 필드나 입력한 비밀번호 원문이 보이면 통과로 판정하지 않습니다. CAPTCHA 토큰은 일회용이며 로그나 제출 자료에 복사하지 않습니다. Response·Console·화면과 Supabase Edge Function 로그에도 비밀번호 원문이 없어야 합니다.
 
 로그인한 사람을 식별하는 값, 만료 시각, 같은 요청의 로그아웃 전후 비교 절차는 [`docs/card-3-session-revocation.md`](docs/card-3-session-revocation.md)에 기록합니다. 실제 응답은 운영 SQL과 Edge Function을 배포한 뒤 시험 계정으로 확인하기 전에는 통과로 판정하지 않습니다.

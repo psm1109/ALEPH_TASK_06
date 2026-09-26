@@ -17,11 +17,17 @@ import {
 const WORKSPACE_ID = "pds-main";
 const EXPORT_SCHEMA_VERSION = "2.3.0";
 const GENERIC_LOGIN_ERROR = "이메일 또는 비밀번호를 확인해 주세요.";
+const TURNSTILE_SCRIPT_URL = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+const CAPTCHA_REQUIRED_ERROR = "자동화 방지 확인을 완료한 뒤 다시 시도해 주세요.";
+
+let turnstileLoadPromise = null;
 
 const state = {
   config: readConfig(),
   authClient: null,
   session: null,
+  captchaWidgets: { login: null, signup: null },
+  captchaTokens: { login: "", signup: "" },
   connected: false,
   loading: false,
   versions: [],
@@ -53,6 +59,8 @@ const elements = {
   signupTab: $("#signup-tab"),
   loginForm: $("#login-form"),
   signupForm: $("#signup-form"),
+  loginCaptcha: $("#login-captcha"),
+  signupCaptcha: $("#signup-captcha"),
   appShell: $("#app-shell"),
   signedInEmail: $("#signed-in-email"),
   logoutButton: $("#logout-button"),
@@ -81,6 +89,7 @@ function readConfig() {
   const config = normalizeConfig({
     url: embedded.supabaseUrl,
     publishableKey: embedded.supabasePublishableKey,
+    turnstileSiteKey: embedded.turnstileSiteKey,
   });
   return config.url && config.publishableKey.startsWith("sb_publishable_") ? config : null;
 }
@@ -89,6 +98,7 @@ function normalizeConfig(config) {
   return {
     url: String(config.url || "").trim().replace(/\/$/, ""),
     publishableKey: String(config.publishableKey || "").trim(),
+    turnstileSiteKey: String(config.turnstileSiteKey || "").trim(),
   };
 }
 
@@ -96,7 +106,64 @@ function hasConfig() {
   return Boolean(state.config?.url && state.config?.publishableKey);
 }
 
-async function requestProtectedAuth(mode, email, password) {
+function loadTurnstile() {
+  if (window.turnstile) return Promise.resolve(window.turnstile);
+  if (turnstileLoadPromise) return turnstileLoadPromise;
+
+  turnstileLoadPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = TURNSTILE_SCRIPT_URL;
+    script.async = true;
+    script.onload = () => window.turnstile
+      ? resolve(window.turnstile)
+      : reject(new Error("Turnstile API unavailable"));
+    script.onerror = () => reject(new Error("Turnstile API unavailable"));
+    document.head.append(script);
+  });
+  return turnstileLoadPromise;
+}
+
+function renderCaptcha(mode) {
+  if (!window.turnstile || !state.config?.turnstileSiteKey || state.captchaWidgets[mode] !== null) return;
+  const container = mode === "login" ? elements.loginCaptcha : elements.signupCaptcha;
+  state.captchaWidgets[mode] = window.turnstile.render(container, {
+    sitekey: state.config.turnstileSiteKey,
+    callback: (token) => {
+      state.captchaTokens[mode] = String(token || "");
+      if (elements.authNotice.textContent === CAPTCHA_REQUIRED_ERROR) elements.authNotice.hidden = true;
+    },
+    "expired-callback": () => {
+      state.captchaTokens[mode] = "";
+    },
+    "error-callback": () => {
+      state.captchaTokens[mode] = "";
+      showAuthNotice("자동화 방지 확인을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.");
+    },
+  });
+}
+
+function resetCaptcha(mode) {
+  state.captchaTokens[mode] = "";
+  const widgetId = state.captchaWidgets[mode];
+  if (window.turnstile && widgetId !== null) window.turnstile.reset(widgetId);
+}
+
+async function initializeCaptcha() {
+  if (!state.config?.turnstileSiteKey) {
+    showAuthNotice("자동화 방지 설정이 없습니다. public/config.js를 확인해 주세요.");
+    return false;
+  }
+  try {
+    await loadTurnstile();
+    renderCaptcha(elements.signupForm.hidden ? "login" : "signup");
+    return true;
+  } catch {
+    showAuthNotice("자동화 방지 확인을 불러오지 못했습니다. 네트워크 연결을 확인해 주세요.");
+    return false;
+  }
+}
+
+async function requestProtectedAuth(mode, email, password, captchaToken) {
   const endpoint = `${state.config.url}/functions/v1/auth-gateway`;
   const headers = { apikey: state.config.publishableKey };
   const keyResponse = await fetch(endpoint, { headers, cache: "no-store" });
@@ -108,7 +175,7 @@ async function requestProtectedAuth(mode, email, password) {
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { ...headers, "Content-Type": "application/json" },
-    body: JSON.stringify({ mode, ...encrypted }),
+    body: JSON.stringify({ mode, captcha_token: captchaToken, ...encrypted }),
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error("인증 요청을 처리하지 못했습니다.");
@@ -134,6 +201,7 @@ function setAuthMode(mode) {
   elements.loginForm.hidden = !isLogin;
   elements.signupForm.hidden = isLogin;
   elements.authNotice.hidden = true;
+  renderCaptcha(isLogin ? "login" : "signup");
   const firstInput = (isLogin ? elements.loginForm : elements.signupForm).elements.email;
   firstInput.focus({ preventScroll: true });
 }
@@ -164,6 +232,7 @@ function showSignedOutScreen(message = "") {
   elements.loginForm.reset();
   elements.signupForm.reset();
   setAuthMode("login");
+  if (hasConfig() && state.captchaWidgets.login === null) void initializeCaptcha();
   if (message) showAuthNotice(message, "success");
 }
 
@@ -179,6 +248,11 @@ async function handleLoginSubmit(event) {
   event.preventDefault();
   if (!elements.loginForm.reportValidity() || !state.authClient) return;
   const formData = new FormData(elements.loginForm);
+  const captchaToken = state.captchaTokens.login;
+  if (!captchaToken) {
+    showAuthNotice(CAPTCHA_REQUIRED_ERROR);
+    return;
+  }
   setLoading(true);
   elements.authNotice.hidden = true;
   try {
@@ -186,6 +260,7 @@ async function handleLoginSubmit(event) {
       "login",
       String(formData.get("email") || "").trim(),
       String(formData.get("password") || ""),
+      captchaToken,
     );
     const session = await persistProtectedSession(payload);
     if (!session) {
@@ -199,6 +274,7 @@ async function handleLoginSubmit(event) {
     showAuthNotice(GENERIC_LOGIN_ERROR);
   } finally {
     elements.loginForm.elements.password.value = "";
+    resetCaptcha("login");
     setLoading(false);
   }
 }
@@ -214,6 +290,11 @@ async function handleSignupSubmit(event) {
     showAuthNotice("비밀번호 확인 값이 서로 다릅니다.");
     return;
   }
+  const captchaToken = state.captchaTokens.signup;
+  if (!captchaToken) {
+    showAuthNotice(CAPTCHA_REQUIRED_ERROR);
+    return;
+  }
 
   setLoading(true);
   elements.authNotice.hidden = true;
@@ -222,6 +303,7 @@ async function handleSignupSubmit(event) {
       "signup",
       String(formData.get("email") || "").trim(),
       password,
+      captchaToken,
     );
     const session = await persistProtectedSession(payload);
 
@@ -239,6 +321,7 @@ async function handleSignupSubmit(event) {
   } finally {
     elements.signupForm.elements.password.value = "";
     elements.signupForm.elements.password_confirm.value = "";
+    resetCaptcha("signup");
     setLoading(false);
   }
 }

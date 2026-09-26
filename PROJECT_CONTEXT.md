@@ -6,8 +6,8 @@
 
 - 저장소: `psm1109/ALEPH_TASK_06`
 - 작업 브랜치: `codex/card-1-auth`
-- 현재 기준 커밋: `ec63620`
-- 계정 삭제와 연결 자료 연쇄 삭제 기능까지 커밋되어 있으며, 작업 트리에는 계정 관리 펼침 메뉴·삭제 확인 모달 UI 변경이 아직 커밋되지 않은 상태로 남아 있습니다.
+- 현재 기준 커밋: `d003e39`
+- 계정 관리 펼침 메뉴와 삭제 이중 확인 UI까지 커밋되어 있습니다. 이번 Rate Limit·Turnstile 작업은 아직 커밋하지 않았습니다.
 - 원격 추적 브랜치: `origin/codex/card-1-auth`
 - 고정된 최종 T06 조상 커밋: `bab809b`
 - 현재 브랜치에는 병합 커밋 `59530ab`과 카드 1의 과거 커밋 두 개가 함께 있습니다. 앞으로는 현재 브랜치의 최신 파일과 HEAD를 기준으로 작업합니다.
@@ -61,7 +61,7 @@
 - 비밀번호 저장과 비교는 직접 구현하지 않고 Supabase Auth에 맡겼습니다.
 - 브라우저의 Supabase Auth 직접 로그인·가입 호출을 제거했습니다.
 - 브라우저는 자격 증명을 AES-256-GCM으로 암호화하고, 일회용 AES 키를 RSA-OAEP-256으로 암호화해 `auth-gateway` Edge Function에 보냅니다.
-- 네트워크 Request Payload에는 `mode`, `encrypted_key`, `iv`, `ciphertext`만 포함하며 이메일·비밀번호 필드를 넣지 않습니다.
+- 네트워크 Request Payload에는 `mode`, 일회용 `captcha_token`, `encrypted_key`, `iv`, `ciphertext`만 포함하며 이메일·비밀번호 필드를 넣지 않습니다.
 - `auth-gateway`는 요청·응답 본문을 로그에 남기지 않고, Auth 오류 상세를 폐기하며 성공 응답도 세션 허용 목록 필드만 반환합니다.
 - 가입·로그인 시도가 끝나면 비밀번호 입력칸을 비웁니다.
 - 두 시험 계정의 bcrypt 해시를 표시하고 서로 다른지 확인하는 SQL Editor용 쿼리를 추가했습니다.
@@ -611,7 +611,7 @@ git diff --check
 1. 카드 4의 `public/app.js` 변경을 커밋·푸시한 뒤 Vercel 앱을 재배포하고, 실제 화면의 생성·수정·삭제 회귀를 확인합니다.
 2. 기존 `pds-main` 자료를 본인 계정으로 이관해야 한다면 `supabase/migrate-existing-data.sql`의 이메일 자리만 바꾼 뒤 실행합니다.
 3. 카드 2 제출을 위해 `supabase/password-evidence.sql`의 시험 계정 이메일 두 곳을 바꿔 실행하고 bcrypt 해시 차이를 기록합니다.
-4. 배포된 앱에서 로그인 요청 Payload가 `mode`, `encrypted_key`, `iv`, `ciphertext`만 포함하는지 확인합니다. Response·Console·화면·Edge Function 로그에서 시험 비밀번호 원문을 검색해 모두 0건인지 확인합니다.
+4. 배포된 앱에서 로그인 요청 Payload가 `mode`, `captcha_token`, `encrypted_key`, `iv`, `ciphertext`만 포함하는지 확인합니다. Response·Console·화면·Edge Function 로그에서 시험 비밀번호 원문을 검색해 모두 0건인지 확인합니다. CAPTCHA 토큰도 제출 자료나 로그에 복사하지 않습니다.
 
 ## 기존 자료 관련 주의사항
 
@@ -766,3 +766,75 @@ git diff --check
 - 사용자가 배포 앱에서 계정 삭제 요청이 실제로 진행되는 것까지 확인했습니다.
 - 이 기록은 사용자 확인에 근거하며, 이번 작업에서는 브라우저 요청 상태·Auth 사용자 삭제 여부·연결 자료의 삭제 전후 행 수를 다시 조회하지 않았습니다.
 - T07-C134의 최종 운영 증거로 사용할 때는 별도 시험 계정에서 삭제 전 자료 건수, 삭제 뒤 재로그인 거절, 여섯 자료 표의 본인 행 0건을 함께 확인하는 것이 남아 있습니다.
+
+## 2026-09-26 로그인 공격 방어 1단계 — 운영 Rate Limit 조정
+
+- 운영 Supabase 프로젝트 `ALEPH_TASK_06`이 Free 플랜임을 대시보드에서 확인했습니다.
+- Authentication > Rate Limits에서 로그인·가입 요청 제한의 기존값이 IP당 `30 requests/5 min`임을 확인했습니다.
+- 로그인·가입 요청 제한만 IP당 `10 requests/5 min`으로 낮추고 저장했습니다.
+- 페이지를 새로고침한 뒤 `10 requests/5 min`이 유지되는 것을 확인했습니다.
+- token refresh `150 requests/5 min`, token verification `30 requests/5 min` 등 다른 제한값은 변경하지 않았습니다.
+- IP Address Forwarding은 꺼진 상태이며 변경하지 않았습니다.
+- Authentication > Attack Protection에서 CAPTCHA가 꺼져 있음을 확인했습니다.
+- CAPTCHA 공급자로 Cloudflare Turnstile을 선택할 수 있고 Supabase 저장에는 provider의 Captcha secret이 필요함을 확인했습니다. 아직 Secret이 없어 변경을 취소했으며 CAPTCHA는 꺼진 상태입니다.
+
+코드·문서 확인:
+
+- 기능 코드는 수정하지 않았습니다.
+- 운영 설정 확인 결과만 `PROJECT_CONTEXT.md`에 기록했습니다.
+- 이번 단계에서는 테스트를 실행하지 않았습니다.
+
+다음 단계:
+
+1. 사용자가 Cloudflare Dashboard에 직접 로그인하거나 계정을 생성합니다.
+2. Turnstile 위젯에 운영 호스트 `aleph-task-06.vercel.app`을 등록합니다.
+3. 발급된 Site key는 공개 설정으로 앱에 연결하고, Secret key는 코드·문서·채팅에 남기지 않은 채 Supabase CAPTCHA 설정에 직접 입력합니다.
+4. CAPTCHA를 저장하기 전에 로그인·가입 화면이 토큰을 생성해 `auth-gateway`로 전달하도록 코드와 정적 검사를 먼저 준비합니다. 준비 없이 Supabase CAPTCHA만 켜면 현재 로그인·가입이 실패할 수 있습니다.
+
+## 2026-09-26 로그인 공격 방어 2단계 — Turnstile 코드 준비
+
+- Cloudflare 계정에서 `ALEPH_TASK_06` Turnstile 위젯을 만들고 운영 호스트 `aleph-task-06.vercel.app`과 관리형 모드를 지정했습니다.
+- 공개 Site key를 `public/config.js`에 추가했습니다.
+- 로그인·가입 폼에 각각 Turnstile 위젯 영역을 추가하고, 토큰이 없으면 인증 요청을 보내지 않도록 했습니다.
+- 인증 시도 뒤 성공·실패와 관계없이 사용한 Turnstile 토큰을 초기화합니다.
+- `auth-gateway`가 `captcha_token`을 받아 Supabase Auth의 `gotrue_meta_security.captcha_token`으로 전달하도록 했습니다.
+- Turnstile Secret key는 코드·문서에 기록하지 않았습니다. 발급 화면 확인 과정에서 작업 출력에 노출된 첫 Secret은 사용하지 않고 Cloudflare에서 회전한 뒤 Supabase에 새 값만 입력해야 합니다.
+- 운영 로그인·가입 중단을 막기 위해 Supabase CAPTCHA는 아직 켜지 않았습니다.
+
+관련 파일:
+
+- `public/config.js`
+- `public/index.html`
+- `public/styles.css`
+- `public/app.js`
+- `supabase/functions/auth-gateway/index.ts`
+- `tests/auth-captcha.test.cjs`
+- `tests/card2-password.test.cjs`
+- `contracts/pds-schema-v2.json`
+- `README.md`
+- `docs/card-2-password.md`
+- `docs/card-5-auth-guide-and-five-day-use.md`
+- `PROJECT_CONTEXT.md`
+
+현재 확인 결과:
+
+- `node --check public/app.js` — 통과
+- `node tests/auth-captcha.test.cjs` — 13개 통과
+- `node tests/card1-static.test.cjs` — 20개 통과
+- `node tests/auth-crypto.test.mjs` — 5개 통과
+- `node tests/card2-password.test.cjs` 첫 실행 — 기존 요청 필드 단언이 CAPTCHA 이전 값이라 실패했고, 새 필드 목록에 맞게 수정함
+- `tests`의 `*.test.cjs`, `*.test.mjs` 전체 Node 검사 — 11개 파일, 총 169개 통과, 실패 0개
+- `node --check public/app.js` — 통과
+- 계약 JSON 파싱 — 통과
+- `tests/git-secret-history.test.ps1` — Git 전체 patch 기록 비밀값 검사 통과
+- `git diff --check` — 통과(LF→CRLF 안내만 표시)
+- 새 Turnstile 위젯의 실제 렌더링과 운영 로그인·가입 검증은 아직 실행 전입니다.
+
+안전한 다음 순서:
+
+1. 전체 정적 검사를 다시 실행합니다.
+2. 변경을 검토한 뒤 사용자가 커밋·푸시하고 Vercel 정적 앱을 먼저 배포합니다.
+3. 최신 `auth-gateway`를 운영 Supabase에 배포합니다.
+4. Cloudflare에서 첫 Secret을 회전합니다.
+5. 새 Secret을 값이 보이지 않게 Supabase CAPTCHA 설정으로 옮기고 Turnstile을 활성화합니다.
+6. 운영 로그인·가입 성공, 토큰 없는 직접 Auth 요청 거절, Payload·Response·Console·Edge Function 로그의 비밀번호 원문 0건을 확인합니다.
