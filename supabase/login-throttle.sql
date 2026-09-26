@@ -16,6 +16,8 @@ create table if not exists private.auth_login_throttle (
   primary key (scope, subject_hash)
 );
 
+alter table private.auth_login_throttle enable row level security;
+
 create index if not exists auth_login_throttle_last_failed_idx
   on private.auth_login_throttle (last_failed_at);
 

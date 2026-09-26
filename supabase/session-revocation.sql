@@ -3,7 +3,7 @@
 
 create schema if not exists private;
 revoke all on schema private from public;
-grant usage on schema private to authenticated;
+grant usage on schema private to authenticated, service_role;
 
 create or replace function private.is_auth_session_active()
 returns boolean
