@@ -144,7 +144,7 @@ test("실행 기록 변경 직후 주간과 할 일과 돌아보기를 함께 �
   assert.match(app, /state\.taskExecutions = state\.taskExecutions\.filter[\s\S]*?renderWeek\(\);[\s\S]*?renderTasks\(\);[\s\S]*?renderCompletionSummary\(\)/);
   assert.match(app, /state\.taskExecutions\.unshift\(saved\)[\s\S]*?renderWeek\(\);[\s\S]*?renderTasks\(\);[\s\S]*?renderCompletionSummary\(\)/);
   assert.match(app, /document\.addEventListener\("visibilitychange"/);
-  assert.match(app, /await resetExpiredTaskCompletions\(toSeoulISODate\(\)\)/);
+  assert.match(app, /await resetExpiredTaskCompletions\(toSeoulISODate\(\)(?:,\s*sessionForLoad)?\)/);
 });
 
 test("기존 완료 이벤트 테이블은 소유자별로 보호한다", () => {

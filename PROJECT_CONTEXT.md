@@ -6,11 +6,11 @@
 
 - 저장소: `psm1109/ALEPH_TASK_06`
 - 작업 브랜치: `codex/card-1-auth`
-- 현재 기준 커밋: `2763d0c`
-- Turnstile 연동은 `e130faf`, 점진적 로그인 제한은 `cb5cc8d`, `service_role` 권한 복구는 `2763d0c`로 `origin/codex/card-1-auth`에 푸시했습니다.
-- 원격 추적 브랜치: `origin/codex/card-1-auth` (`2763d0c`)
-- 현재 작업 트리에는 Supabase Auth 오류의 `error_code`를 숫자 `code`보다 먼저 읽는 `auth-gateway` 수정, `service_role` 함수 실행 권한 보강, 카드 5·인계 문서 갱신이 커밋되지 않은 상태로 남아 있습니다.
-- 고정된 최종 T06 조상 커밋: `bab809b`
+- 현재 기준 커밋: `3e67ab2`
+- Turnstile 연동은 `e130faf`, 점진적 로그인 제한은 `cb5cc8d`, `service_role` 권한 복구는 `2763d0c`, 카드 5 운영 문서와 인증 방어 수정은 `3e67ab2`로 기록되어 있습니다.
+- 원격 추적 브랜치: `origin/codex/card-1-auth` (`3e67ab2`로 로컬 추적 중; 원격 실시간 조회는 현재 Git remote helper 오류로 재확인하지 못함)
+- 현재 작업 트리에는 계정 전환 중 이전 사용자 자료가 보이지 않도록 하는 로드 경계 수정과 관련 정적 테스트가 커밋되지 않은 상태로 남아 있습니다. `docs/card-1-auth.md`에는 이번 작업과 무관한 기존 사용자 변경도 남아 있습니다.
+- 제출 당시 최종 T06 조상 커밋: `614314f1b143511875f0e4d28d304fd83da46fbc`
 - 현재 브랜치에는 병합 커밋 `59530ab`과 카드 1의 과거 커밋 두 개가 함께 있습니다. 앞으로는 현재 브랜치의 최신 파일과 HEAD를 기준으로 작업합니다.
 
 ## 선택한 인증 설계
@@ -631,7 +631,7 @@ git diff --check
 - 완료: 전체 JSON 내보내기 경로를 카드 5 문서와 계약서에 연결했습니다.
 - 완료: `account-delete` Edge Function, 로그인 후 `계정 삭제` 버튼, 계정 삭제 확인 문구를 추가했습니다. Auth 사용자 삭제 후 `on delete cascade`로 연결 자료가 삭제되도록 기존 스키마 경계를 사용합니다.
 - 현재 브랜치/커밋: `codex/card-1-auth` / `a593eed` 기준이며 이번 변경은 아직 커밋하지 않았습니다.
-- 고정 T06 조상: `bab809b`; `git merge-base --is-ancestor bab809b HEAD` 통과.
+- 제출 당시 고정 T06 조상: `614314f1b143511875f0e4d28d304fd83da46fbc`; `git merge-base --is-ancestor 614314f1b143511875f0e4d28d304fd83da46fbc HEAD` 통과.
 
 관련 파일:
 
@@ -949,3 +949,36 @@ git diff --check
 1. 변경 diff를 검토하고 `auth-gateway` 오류 코드 수정, 두 SQL 권한 보강, 카드 5 문서 변경을 함께 커밋·푸시합니다.
 2. 새 `auth-gateway` 배포 뒤 시험 계정에서 3회 이상 실패의 `429`와 성공 초기화를 확인합니다.
 3. 이후 별도 작업으로 2FA 등록 강제와 `aal2` RLS를 설계합니다.
+
+## 2026-09-26 계정 전환 중 이전 사용자 자료 노출 방지
+
+- 한 브라우저에서 A 계정에서 B 계정으로 전환할 때 B 세션을 저장한 직후 Supabase 자료 응답을 기다리는 동안 A의 메모리 상태가 화면에 남을 수 있는 경계를 확인했습니다.
+- `showSignedInApp()`에서 새 세션을 표시하기 전에 다이어리 배열을 비우고 빈 상태를 렌더링하며, 연결 상태를 `Supabase 불러오는 중`으로 표시하도록 수정했습니다.
+- 자료 로드는 사용자 ID와 증가하는 `dataLoadGeneration`을 함께 캡처합니다. 계정 전환·로그아웃·새 로드가 시작된 뒤 늦게 도착한 이전 요청의 응답은 상태에 반영하지 않습니다.
+- Supabase 요청에 로드 시점의 세션을 명시적으로 전달해 이전 계정의 access token을 새 계정 로드와 섞지 않도록 했습니다.
+
+관련 파일:
+
+- `public/app.js`
+- `tests/card1-static.test.cjs`
+- `tests/week-record-separation.test.cjs`
+- `PROJECT_CONTEXT.md`
+
+실행한 검사:
+
+- `node --check public\app.js` — 통과
+- `tests`의 `*.test.cjs`, `*.test.mjs` 전체 Node 검사 — 통과, 실패 0개
+- `tests\git-secret-history.test.ps1` — 통과
+- 대상 변경 파일의 `git diff --check` — 통과
+
+확인하지 않은 항목:
+
+- 실제 운영 브라우저에서 A→B 전환을 반복해 네트워크 응답 전·후 화면을 확인하지 않았습니다.
+- 현재 작업 트리의 계정 전환 수정은 아직 커밋·푸시·Vercel 재배포하지 않았습니다.
+- 기존 사용자 변경인 `docs/card-1-auth.md`의 파일 끝 공백 때문에 전체 `git diff --check`에는 경고가 아닌 오류가 1건 남아 있습니다. 해당 파일은 이번 수정에서 건드리지 않았습니다.
+
+다음 단계:
+
+1. 계정 전환 수정 diff를 검토합니다.
+2. 별도 커밋으로 저장한 뒤 Vercel 정적 앱을 배포합니다.
+3. 같은 브라우저에서 A 로그인 → 로그아웃 또는 B 로그인 → 로딩 중 화면 → B 자료 표시 순서를 실제로 확인합니다.

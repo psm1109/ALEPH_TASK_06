@@ -22,7 +22,13 @@ assert.doesNotMatch(app, /\.auth\.signUp\(/);
 assert.doesNotMatch(app, /\.auth\.signInWithPassword\(/);
 assert.match(app, /\.auth\.setSession\(/);
 assert.match(app, /signOut\(/);
-assert.match(app, /Authorization: `Bearer \$\{state\.session\.access_token\}`/);
+assert.match(app, /Authorization: `Bearer \$\{session\.access_token\}`/);
+assert.match(app, /dataLoadGeneration: 0/);
+assert.match(app, /function invalidateDataLoad\(\)/);
+assert.match(app, /function isCurrentDataLoad\(generation, userId\)/);
+assert.match(app, /state\.session = session;\s+invalidateDataLoad\(\);\s+clearDiaryState\(\);/);
+assert.match(app, /const sessionForLoad = state\.session/);
+assert.match(app, /if \(!isCurrentDataLoad\(loadGeneration, userIdForLoad\)\) return false;/);
 assert.match(app, /const GENERIC_LOGIN_ERROR = "이메일 또는 비밀번호를 확인해 주세요\."/);
 assert.doesNotMatch(app, /[?&](access_token|refresh_token)=/);
 

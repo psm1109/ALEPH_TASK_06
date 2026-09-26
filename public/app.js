@@ -31,6 +31,7 @@ const state = {
   captchaTokens: { login: "", signup: "" },
   loginCooldownUntil: 0,
   loginCooldownTimer: null,
+  dataLoadGeneration: 0,
   connected: false,
   loading: false,
   versions: [],
@@ -267,9 +268,21 @@ function clearDiaryState() {
   state.missedDays = [];
 }
 
+function invalidateDataLoad() {
+  state.dataLoadGeneration += 1;
+  return state.dataLoadGeneration;
+}
+
+function isCurrentDataLoad(generation, userId) {
+  return state.dataLoadGeneration === generation
+    && state.session?.user?.id === userId;
+}
+
 function showSignedOutScreen(message = "") {
+  invalidateDataLoad();
   state.session = null;
   clearDiaryState();
+  setLoading(false);
   setAccountMenuOpen(false);
   if (elements.accountDeleteDialog.open) elements.accountDeleteDialog.close();
   elements.appShell.hidden = true;
@@ -284,9 +297,14 @@ function showSignedOutScreen(message = "") {
 async function showSignedInApp(session, { reload = true } = {}) {
   clearLoginCooldown();
   state.session = session;
+  invalidateDataLoad();
+  clearDiaryState();
   elements.signedInEmail.textContent = session.user.email || "로그인 사용자";
+  elements.notice.hidden = true;
   elements.authScreen.hidden = true;
   elements.appShell.hidden = false;
+  setConnectionState("loading", "Supabase 불러오는 중");
+  renderAll();
   if (reload) await connectAndLoad({ announce: false });
 }
 
@@ -400,15 +418,21 @@ function openAccountDeleteDialog() {
   elements.accountDeleteDialog.showModal();
 }
 
-async function supabaseRequest(table, { method = "GET", query = "", body, prefer } = {}) {
+async function supabaseRequest(table, {
+  method = "GET",
+  query = "",
+  body,
+  prefer,
+  session = state.session,
+} = {}) {
   if (!hasConfig()) throw new Error("Supabase 연결 정보가 필요합니다.");
-  if (!state.session?.access_token) throw new Error("로그인이 필요합니다.");
+  if (!session?.access_token) throw new Error("로그인이 필요합니다.");
 
   const response = await fetch(`${state.config.url}/functions/v1/diary-data/${table}${query ? `?${query}` : ""}`, {
     method,
     headers: {
       apikey: state.config.publishableKey,
-      Authorization: `Bearer ${state.session.access_token}`,
+      Authorization: `Bearer ${session.access_token}`,
       "Content-Type": "application/json",
       Prefer: prefer || (["POST", "PATCH"].includes(method) ? "return=representation" : "return=minimal"),
     },
@@ -462,26 +486,28 @@ async function deleteAccount() {
   }
 }
 
-async function loadAllRows(table, query) {
+async function loadAllRows(table, query, session = state.session) {
   const rows = [];
   const pageSize = 1000;
   while (true) {
     const page = await supabaseRequest(table, {
       query: `${query}&limit=${pageSize}&offset=${rows.length}`,
+      session,
     });
     rows.push(...page);
     if (page.length < pageSize) return rows;
   }
 }
 
-async function resetExpiredTaskCompletions(today) {
+async function resetExpiredTaskCompletions(today, session = state.session) {
   const startOfToday = new Date(`${today}T00:00:00+09:00`).toISOString();
   await supabaseRequest("tasks", {
     method: "PATCH",
     query: `workspace_id=eq.${WORKSPACE_ID}&is_completed=eq.true&or=(completed_at.is.null,completed_at.lt.${encodeURIComponent(startOfToday)})`,
     body: { is_completed: false, completed_at: null, updated_at: new Date().toISOString() },
+    session,
   });
-  return loadAllRows("tasks", `workspace_id=eq.${WORKSPACE_ID}&order=created_at.asc,id.asc`);
+  return loadAllRows("tasks", `workspace_id=eq.${WORKSPACE_ID}&order=created_at.asc,id.asc`, session);
 }
 
 async function connectAndLoad({ announce = true } = {}) {
@@ -491,24 +517,37 @@ async function connectAndLoad({ announce = true } = {}) {
     return false;
   }
 
+  const loadGeneration = invalidateDataLoad();
+  const sessionForLoad = state.session;
+  const userIdForLoad = sessionForLoad?.user?.id;
+  if (!sessionForLoad?.access_token || !userIdForLoad) {
+    state.connected = false;
+    setConnectionState("error", "로그인 필요");
+    return false;
+  }
+
   setLoading(true);
   try {
     const versions = await supabaseRequest(
       "plan_versions",
-      { query: `workspace_id=eq.${WORKSPACE_ID}&order=version.desc` },
+      { query: `workspace_id=eq.${WORKSPACE_ID}&order=version.desc`, session: sessionForLoad },
     );
 
     let [reflections, tasks, taskExecutions, completionEvents, missedDays] = await Promise.all([
       supabaseRequest("reflections", {
         query: `workspace_id=eq.${WORKSPACE_ID}&order=reflection_date.desc,created_at.desc`,
+        session: sessionForLoad,
       }),
-      loadAllRows("tasks", `workspace_id=eq.${WORKSPACE_ID}&order=created_at.asc,id.asc`),
+      loadAllRows("tasks", `workspace_id=eq.${WORKSPACE_ID}&order=created_at.asc,id.asc`, sessionForLoad),
       supabaseRequest("task_execution_logs", {
         query: `workspace_id=eq.${WORKSPACE_ID}&order=start_time.desc`,
+        session: sessionForLoad,
       }),
-      loadAllRows("task_completion_events", `workspace_id=eq.${WORKSPACE_ID}&order=completed_at.desc,id.desc`),
-      loadAllRows("task_missed_days", `workspace_id=eq.${WORKSPACE_ID}&order=missed_day.desc,id.desc`),
+      loadAllRows("task_completion_events", `workspace_id=eq.${WORKSPACE_ID}&order=completed_at.desc,id.desc`, sessionForLoad),
+      loadAllRows("task_missed_days", `workspace_id=eq.${WORKSPACE_ID}&order=missed_day.desc,id.desc`, sessionForLoad),
     ]);
+
+    if (!isCurrentDataLoad(loadGeneration, userIdForLoad)) return false;
 
     const currentVersion = versions[0] || null;
     const currentPlanTasks = currentVersion ? tasks : [];
@@ -522,24 +561,29 @@ async function connectAndLoad({ announce = true } = {}) {
     );
     if (pendingMissedDays.length) {
       for (let index = 0; index < pendingMissedDays.length; index += 200) {
+        if (!isCurrentDataLoad(loadGeneration, userIdForLoad)) return false;
         await supabaseRequest("task_missed_days", {
           method: "POST",
           query: "on_conflict=user_id,task_id,missed_day",
           prefer: "resolution=ignore-duplicates,return=representation",
           body: pendingMissedDays.slice(index, index + 200),
+          session: sessionForLoad,
         });
       }
-      missedDays = await loadAllRows("task_missed_days", `workspace_id=eq.${WORKSPACE_ID}&order=missed_day.desc,id.desc`);
+      if (!isCurrentDataLoad(loadGeneration, userIdForLoad)) return false;
+      missedDays = await loadAllRows("task_missed_days", `workspace_id=eq.${WORKSPACE_ID}&order=missed_day.desc,id.desc`, sessionForLoad);
     }
 
     let resetError = null;
     if (tasks.some((task) => taskNeedsDailyReset(task))) {
       try {
-        tasks = await resetExpiredTaskCompletions(toSeoulISODate());
+        tasks = await resetExpiredTaskCompletions(toSeoulISODate(), sessionForLoad);
       } catch (error) {
         resetError = error;
       }
     }
+
+    if (!isCurrentDataLoad(loadGeneration, userIdForLoad)) return false;
 
     state.versions = versions.sort((a, b) => b.version - a.version);
     state.reflections = reflections;
@@ -554,12 +598,13 @@ async function connectAndLoad({ announce = true } = {}) {
     else if (announce) showNotice("Supabase에서 최신 기록을 불러왔습니다.", "success", 2800);
     return true;
   } catch (error) {
+    if (!isCurrentDataLoad(loadGeneration, userIdForLoad)) return false;
     state.connected = false;
     setConnectionState("error", "Supabase 연결 실패");
     showNotice(`Supabase에 연결하지 못했습니다. ${error.message}`, "error");
     return false;
   } finally {
-    setLoading(false);
+    if (isCurrentDataLoad(loadGeneration, userIdForLoad)) setLoading(false);
   }
 }
 
