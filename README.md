@@ -23,7 +23,7 @@
 - Supabase Auth는 비밀번호를 계정별 무작위 salt가 포함된 bcrypt 해시로 `auth.users.encrypted_password`에 저장합니다.
 - 앱과 `auth-gateway`는 인증 요청이나 응답 본문을 로그에 기록하지 않으며, 인증 시도 뒤 비밀번호 입력칸을 비웁니다.
 - Edge Function은 Supabase Auth 오류 본문을 브라우저로 전달하지 않고 일반화된 실패 응답만 반환하며, 성공 시 세션에 필요한 허용 목록 필드만 반환합니다.
-- 같은 비밀번호로 만든 두 시험 계정의 해시 확인은 SQL Editor 전용 [`supabase/card2-password-evidence.sql`](supabase/card2-password-evidence.sql)을 사용합니다. 이 파일에는 비밀번호를 적지 않습니다.
+- 같은 비밀번호로 만든 두 시험 계정의 해시 확인은 SQL Editor 전용 [`supabase/password-evidence.sql`](supabase/password-evidence.sql)을 사용합니다. 이 파일에는 비밀번호를 적지 않습니다.
 
 ## 주요 기능
 
@@ -63,8 +63,9 @@
 - 날짜별 미완료 기록은 DB에 저장되고 다음 접속 시 비어 있던 지난 날짜를 보충합니다. 할 일을 삭제하면 연결된 미완료 기록도 함께 삭제됩니다.
 - 화면 상단의 `전체 자료 내보내기`를 누르면 최신 서버 자료를 JSON 파일 하나로 내려받습니다.
 - 내보내기 파일에는 설정 URL, Publishable key, 인증 헤더가 포함되지 않습니다.
-- 계정 영역의 위험 구역에는 계정을 삭제하면 데이터베이스의 계획·할 일·실행·완료·지연·회고 자료도 함께 삭제되며 복구할 수 없다는 안내가 항상 표시됩니다.
-- `계정 삭제`를 누르면 재확인 후 인증된 본인 계정만 삭제하고, `on delete cascade`로 연결된 자료도 함께 삭제합니다. 삭제 전 JSON 내보내기를 권장합니다.
+- 상단의 `Supabase 저장됨` 상태 옆 `계정 관리`를 누르면 로그인 계정, 로그아웃, 계정 삭제 항목이 펼쳐집니다.
+- 계정 삭제 항목에는 데이터베이스의 계획·할 일·실행·완료·지연·회고 자료도 함께 삭제되며 복구할 수 없다는 안내가 표시됩니다.
+- `계정 삭제`를 누르면 안내 모달과 마지막 확인을 차례로 거친 뒤 인증된 본인 계정만 삭제하고, `on delete cascade`로 연결된 자료도 함께 삭제합니다. 삭제 전 JSON 내보내기를 권장합니다.
 - 날짜 표시와 오늘·지연 판정은 `Asia/Seoul`을 기준으로 합니다.
 
 최종 데이터 표, 항목, 관계, 날짜·단위 규칙은 [`contracts/pds-schema-v2.json`](contracts/pds-schema-v2.json)에 정의되어 있습니다.
@@ -72,12 +73,12 @@
 ## Supabase 설정
 
 1. Supabase 프로젝트의 SQL Editor에서 [`supabase/schema.sql`](supabase/schema.sql)을 실행합니다. 이 SQL은 RLS뿐 아니라 로그아웃된 세션을 Data API에서 즉시 거절하는 사전 요청 검사도 설정합니다.
-   기존 카드 1 스키마가 이미 적용된 프로젝트에는 [`supabase/card3-session-revocation.sql`](supabase/card3-session-revocation.sql)만 실행해 카드 3 변경을 증분 적용할 수 있습니다.
+   기존 카드 1 스키마가 이미 적용된 프로젝트에는 [`supabase/session-revocation.sql`](supabase/session-revocation.sql)만 실행해 카드 3 변경을 증분 적용할 수 있습니다.
    기존 PDS Diary 데이터베이스에는 [`supabase/daily-completion.sql`](supabase/daily-completion.sql)과 [`supabase/daily-missed-days.sql`](supabase/daily-missed-days.sql)을 추가로 실행합니다. 이전 버전의 완료 SQL을 이미 실행했다면 새 내용을 다시 실행합니다. 오늘 체크를 풀었던 기존 완료 이벤트는 정리하고, 이전 날짜의 이벤트와 실행 기록은 보존합니다. 과거에 저장되지 못한 완료 날짜는 복구할 수 없습니다.
 2. Supabase Authentication의 Email provider를 활성화합니다. 과제 확인 중 가입 직후 로그인해야 한다면 Confirm email을 끕니다.
 3. [`public/config.js`](public/config.js)에 Project URL과 `sb_publishable_...` 형식의 Publishable key를 설정합니다.
 4. 가입 화면에서 기존 자료를 소유할 본인 계정을 만듭니다.
-5. [`supabase/card1-migrate-existing-data.sql`](supabase/card1-migrate-existing-data.sql)의 `OWNER_EMAIL@example.com` 두 곳을 그 계정 이메일로 바꿔 SQL Editor에서 한 번 실행합니다.
+5. [`supabase/migrate-existing-data.sql`](supabase/migrate-existing-data.sql)의 `OWNER_EMAIL@example.com` 두 곳을 그 계정 이메일로 바꿔 SQL Editor에서 한 번 실행합니다.
 6. 아래의 인증 게이트웨이 설정을 완료합니다.
 7. `public` 디렉터리를 정적 웹 루트로 실행하거나 배포합니다.
 
@@ -141,9 +142,9 @@ python -m http.server 4173 --directory public
 │  ├─ schema.sql       # 사용자 소유권 열, RLS, 날짜별 완료 기록
 │  ├─ daily-completion.sql # 기존 DB의 날짜별 완료 기록 전환
 │  ├─ daily-missed-days.sql # 기존 DB의 날짜별 미완료 기록 테이블 추가
-│  ├─ card5-account-delete-cascade.sql # 기존 운영 DB의 사용자 외래키를 연쇄 삭제로 보강
-│  ├─ card3-session-revocation.sql # 기존 운영 DB용 즉시 세션 폐기 증분 SQL
-│  └─ card1-migrate-existing-data.sql # 기존 pds-main 자료 소유자 이관
+│  ├─ account-delete-cascade.sql # 기존 운영 DB의 사용자 외래키를 연쇄 삭제로 보강
+│  ├─ session-revocation.sql # 기존 운영 DB용 즉시 세션 폐기 증분 SQL
+│  └─ migrate-existing-data.sql # 기존 pds-main 자료 소유자 이관
 └─ contracts/
    └─ pds-schema-v2.json # 데이터 계약과 내보내기 규칙
 ```
@@ -159,7 +160,8 @@ python -m http.server 4173 --directory public
 - 새로고침 후에도 저장된 자료와 집계가 유지됩니다.
 - Plan에서는 계획과 할 일, Do에서는 연결된 실행 기록, See에서는 집계 근거와 회고가 표시됩니다.
 - `전체 자료 내보내기`를 누르면 `pds-diary-<workspace>-YYYY-MM-DD.json` 파일이 생성됩니다.
-- `계정 삭제`는 확인 문구를 거친 뒤 계정과 연결 자료를 삭제하고 로그인 화면으로 돌아갑니다. 실제 운영 확인 전에는 완료로 판정하지 않습니다.
+- 상단 `계정 관리`를 펼치면 로그아웃과 계정 삭제가 보이고, 바깥을 누르거나 Esc를 누르면 닫힙니다.
+- `계정 삭제`는 안내 모달과 마지막 확인을 거친 뒤 계정과 연결 자료를 삭제하고 로그인 화면으로 돌아갑니다. 실제 운영 확인 전에는 완료로 판정하지 않습니다.
 
 연결 정보가 없거나 요청에 실패하면 `Supabase 설정 누락` 또는 `Supabase 연결 실패` 상태와 오류 안내가 표시됩니다. 계획이나 기록이 없을 때는 각 영역에 다음 행동을 알려 주는 빈 상태 안내가 나타납니다.
 

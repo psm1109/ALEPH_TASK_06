@@ -5,7 +5,7 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 const schema = read("supabase/schema.sql");
-const migration = read("supabase/card3-session-revocation.sql");
+const migration = read("supabase/session-revocation.sql");
 const app = read("public/app.js");
 const verifier = read("scripts/verify-session-revocation.mjs");
 const browserEvidence = read("scripts/card3-browser-evidence.js");

@@ -68,8 +68,12 @@ const elements = {
   taskForm: $("#task-form"),
   taskExecutionForm: $("#task-execution-form"),
   accountAccessBar: $("#account-access-bar"),
+  accountMenuToggle: $("#account-menu-toggle"),
+  accountMenuPanel: $("#account-menu-panel"),
+  accountDeleteDialog: $("#account-delete-dialog"),
   exportDataButton: $("#export-data-button"),
   deleteAccountButton: $("#delete-account-button"),
+  confirmDeleteAccountButton: $("#confirm-delete-account-button"),
 };
 
 function readConfig() {
@@ -153,6 +157,8 @@ function clearDiaryState() {
 function showSignedOutScreen(message = "") {
   state.session = null;
   clearDiaryState();
+  setAccountMenuOpen(false);
+  if (elements.accountDeleteDialog.open) elements.accountDeleteDialog.close();
   elements.appShell.hidden = true;
   elements.authScreen.hidden = false;
   elements.loginForm.reset();
@@ -251,6 +257,16 @@ async function handleLogout() {
   }
 }
 
+function setAccountMenuOpen(open) {
+  elements.accountMenuPanel.hidden = !open;
+  elements.accountMenuToggle.setAttribute("aria-expanded", String(open));
+}
+
+function openAccountDeleteDialog() {
+  setAccountMenuOpen(false);
+  elements.accountDeleteDialog.showModal();
+}
+
 async function supabaseRequest(table, { method = "GET", query = "", body, prefer } = {}) {
   if (!hasConfig()) throw new Error("Supabase 연결 정보가 필요합니다.");
   if (!state.session?.access_token) throw new Error("로그인이 필요합니다.");
@@ -284,12 +300,12 @@ async function supabaseRequest(table, { method = "GET", query = "", body, prefer
 async function deleteAccount() {
   if (!requireConnection() || !state.session?.access_token) return;
   const confirmed = window.confirm(
-    "계정을 삭제할까요? 데이터베이스에 저장된 이 계정의 계획·할 일·실행·완료·지연·회고 자료도 함께 삭제되며 복구할 수 없습니다. 먼저 전체 자료를 내보내세요.",
+    "정말 계정을 삭제하시겠습니까? 계정과 연결된 모든 자료가 영구 삭제됩니다.",
   );
   if (!confirmed) return;
 
-  elements.deleteAccountButton.disabled = true;
-  elements.deleteAccountButton.textContent = "계정 삭제 중…";
+  elements.confirmDeleteAccountButton.disabled = true;
+  elements.confirmDeleteAccountButton.lastElementChild.textContent = "계정 삭제 중…";
   try {
     const response = await fetch(`${state.config.url}/functions/v1/account-delete`, {
       method: "POST",
@@ -299,14 +315,17 @@ async function deleteAccount() {
         "Content-Type": "application/json",
       },
     });
-    if (!response.ok) throw new Error("계정 삭제 요청이 거절되었습니다.");
+    if (response.status === 404) throw new Error("계정 삭제 서버가 아직 배포되지 않았습니다. account-delete Edge Function을 확인해 주세요.");
+    if (!response.ok) throw new Error("계정 삭제 요청이 거절되었습니다. 잠시 후 다시 시도해 주세요.");
+    elements.accountDeleteDialog.close();
     await state.authClient.auth.signOut({ scope: "local" }).catch(() => {});
     showSignedOutScreen("계정과 데이터베이스에 저장된 연결 자료를 함께 삭제했습니다.");
-  } catch {
-    showNotice("계정을 삭제하지 못했습니다. 자료는 변경되지 않았습니다. 배포된 account-delete 함수를 확인해 주세요.", "error");
+  } catch (error) {
+    elements.accountDeleteDialog.close();
+    showNotice(error.message || "계정을 삭제하지 못했습니다. 자료는 변경되지 않았습니다.", "error");
   } finally {
-    elements.deleteAccountButton.disabled = false;
-    elements.deleteAccountButton.textContent = "계정 삭제";
+    elements.confirmDeleteAccountButton.disabled = false;
+    elements.confirmDeleteAccountButton.lastElementChild.textContent = "삭제 계속하기";
   }
 }
 
@@ -1535,8 +1554,21 @@ function bindEvents() {
   elements.signupTab.addEventListener("click", () => setAuthMode("signup"));
   elements.loginForm.addEventListener("submit", (event) => void handleLoginSubmit(event));
   elements.signupForm.addEventListener("submit", (event) => void handleSignupSubmit(event));
-  elements.logoutButton.addEventListener("click", () => void handleLogout());
-  elements.deleteAccountButton.addEventListener("click", () => void deleteAccount());
+  elements.accountMenuToggle.addEventListener("click", () => {
+    setAccountMenuOpen(elements.accountMenuPanel.hidden);
+  });
+  elements.logoutButton.addEventListener("click", () => {
+    setAccountMenuOpen(false);
+    void handleLogout();
+  });
+  elements.deleteAccountButton.addEventListener("click", openAccountDeleteDialog);
+  elements.confirmDeleteAccountButton.addEventListener("click", () => void deleteAccount());
+  document.addEventListener("click", (event) => {
+    if (!(event.target instanceof Element) || !event.target.closest(".account-menu")) setAccountMenuOpen(false);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") setAccountMenuOpen(false);
+  });
   $$('[data-close-dialog]').forEach((button) => button.addEventListener("click", () => {
     button.closest("dialog")?.close();
   }));

@@ -1,7 +1,7 @@
 -- PDS Diary authenticated schema.
 -- Authentication: Supabase Auth email/password
 -- Authorization: every row belongs to auth.uid() and is protected by RLS.
--- Existing public pds-main rows remain nullable until card1-migrate-existing-data.sql is run.
+-- Existing public pds-main rows remain nullable until migrate-existing-data.sql is run.
 
 drop table if exists public.activity_logs;
 

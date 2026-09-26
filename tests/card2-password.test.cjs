@@ -8,7 +8,7 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "u
 const html = read("public/index.html");
 const app = read("public/app.js");
 const authCrypto = read("public/auth-crypto.mjs");
-const evidenceSql = read("supabase/card2-password-evidence.sql");
+const evidenceSql = read("supabase/password-evidence.sql");
 const schema = read("supabase/schema.sql");
 const gateway = read("supabase/functions/auth-gateway/index.ts");
 

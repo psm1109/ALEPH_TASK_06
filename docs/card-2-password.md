@@ -19,7 +19,7 @@ bcrypt는 비밀번호 저장을 위해 널리 사용되는 느린 해시 함수
 - 서버 중계: `supabase/functions/auth-gateway/index.ts`가 메모리에서만 복호화해 Supabase Auth에 전달하고 요청·응답 본문을 기록하지 않음
 - 저장과 검증: Supabase Auth 서비스
 - 저장된 해시 위치: Supabase 내부 `auth.users.encrypted_password`
-- 해시 증거 쿼리: `supabase/card2-password-evidence.sql`
+- 해시 증거 쿼리: `supabase/password-evidence.sql`
 
 다이어리의 `public` 스키마 테이블에는 비밀번호 열이 없다. 브라우저는 Supabase Auth의 비밀번호 엔드포인트를 직접 호출하지 않는다. 앱과 게이트웨이는 인증 요청·응답 본문이나 비밀번호를 `console` 및 다이어리 자료에 기록하지 않고, 인증 시도가 끝나면 비밀번호 입력칸을 비운다. 게이트웨이는 Auth 실패 상세를 폐기하고 일반화된 오류만 반환한다.
 
@@ -47,7 +47,7 @@ bcrypt는 비밀번호 저장을 위해 널리 사용되는 느린 해시 함수
 
 ### 데이터베이스 저장 모습
 
-`supabase/card2-password-evidence.sql`의 첫 번째 결과를 붙인다.
+`supabase/password-evidence.sql`의 첫 번째 결과를 붙인다.
 
 ```text
 계정 A bcrypt_hash: [SQL 실행 뒤 실제 해시를 붙일 자리]

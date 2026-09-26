@@ -6,8 +6,8 @@
 
 - 저장소: `psm1109/ALEPH_TASK_06`
 - 작업 브랜치: `codex/card-1-auth`
-- 현재 기준 커밋: `1bc5a7c`
-- 일일 총 시간 차이 문구 배치 변경까지 커밋되어 있으며, 작업 트리에는 아래 근거 기록 UI 정렬·스크롤 변경이 아직 커밋되지 않은 상태로 남아 있습니다.
+- 현재 기준 커밋: `ec63620`
+- 계정 삭제와 연결 자료 연쇄 삭제 기능까지 커밋되어 있으며, 작업 트리에는 계정 관리 펼침 메뉴·삭제 확인 모달 UI 변경이 아직 커밋되지 않은 상태로 남아 있습니다.
 - 원격 추적 브랜치: `origin/codex/card-1-auth`
 - 고정된 최종 T06 조상 커밋: `bab809b`
 - 현재 브랜치에는 병합 커밋 `59530ab`과 카드 1의 과거 커밋 두 개가 함께 있습니다. 앞으로는 현재 브랜치의 최신 파일과 HEAD를 기준으로 작업합니다.
@@ -52,7 +52,7 @@
 - `public/app.js`
 - `public/styles.css`
 - `supabase/schema.sql`
-- `supabase/card1-migrate-existing-data.sql`
+- `supabase/migrate-existing-data.sql`
 - `docs/card-1-auth.md`
 - `tests/card1-static.test.cjs`
 
@@ -69,7 +69,7 @@
 
 관련 파일:
 
-- `supabase/card2-password-evidence.sql`
+- `supabase/password-evidence.sql`
 - `docs/card-2-password.md`
 - `tests/card2-password.test.cjs`
 - `tests/auth-crypto.test.mjs`
@@ -93,7 +93,7 @@
 관련 파일:
 
 - `supabase/schema.sql`
-- `supabase/card3-session-revocation.sql`
+- `supabase/session-revocation.sql`
 - `scripts/verify-session-revocation.mjs`
 - `scripts/card3-browser-evidence.js`
 - `docs/card-3-session-revocation.md`
@@ -162,7 +162,7 @@ git diff --check
 
 - 운영 웹 주소: `https://aleph-task-06.vercel.app/`
 - Supabase 프로젝트: `eidvougocycgramikbwq`
-- `supabase/card3-session-revocation.sql`을 운영 SQL Editor에서 실행했고 `Success. No rows returned`를 확인했습니다.
+- `supabase/session-revocation.sql`을 운영 SQL Editor에서 실행했고 `Success. No rows returned`를 확인했습니다.
 - 적용 뒤 로그인 상태 앱이 `Supabase 저장됨`으로 자료를 정상 조회하는 것을 확인했습니다.
 - 검사 시각: `2026-09-23 14:27:10+09:00`
 - 식별 값: Supabase access-token JWT의 `sub`와 활성 `auth.sessions.session_id`
@@ -609,8 +609,8 @@ git diff --check
 다음 항목은 아직 완료하지 않았습니다.
 
 1. 카드 4의 `public/app.js` 변경을 커밋·푸시한 뒤 Vercel 앱을 재배포하고, 실제 화면의 생성·수정·삭제 회귀를 확인합니다.
-2. 기존 `pds-main` 자료를 본인 계정으로 이관해야 한다면 `supabase/card1-migrate-existing-data.sql`의 이메일 자리만 바꾼 뒤 실행합니다.
-3. 카드 2 제출을 위해 `supabase/card2-password-evidence.sql`의 시험 계정 이메일 두 곳을 바꿔 실행하고 bcrypt 해시 차이를 기록합니다.
+2. 기존 `pds-main` 자료를 본인 계정으로 이관해야 한다면 `supabase/migrate-existing-data.sql`의 이메일 자리만 바꾼 뒤 실행합니다.
+3. 카드 2 제출을 위해 `supabase/password-evidence.sql`의 시험 계정 이메일 두 곳을 바꿔 실행하고 bcrypt 해시 차이를 기록합니다.
 4. 배포된 앱에서 로그인 요청 Payload가 `mode`, `encrypted_key`, `iv`, `ciphertext`만 포함하는지 확인합니다. Response·Console·화면·Edge Function 로그에서 시험 비밀번호 원문을 검색해 모두 0건인지 확인합니다.
 
 ## 기존 자료 관련 주의사항
@@ -651,14 +651,14 @@ git diff --check
 
 아직 확인하지 못한 항목:
 
-- 실제 Supabase에 새 `account-delete` 함수를 배포하고 계정 삭제 후 Auth·자료 삭제를 브라우저에서 확인하지 않았습니다.
+- 아래 2026-09-26 후속 기록에서 `account-delete` 운영 배포와 브라우저의 계정 삭제 진행은 확인했습니다. 삭제 전후 데이터베이스 행 수 대조는 아직 별도 확인하지 않았습니다.
 - 2026-09-24 당시에는 서로 다른 Asia/Seoul 실제 날짜 5일의 사용자 기록, 규칙 변경 시각·이유, 화면 합계와 손계산 대조가 아직 없었습니다. 5일 기록과 합계 대조는 아래 2026-09-26 항목에서 확인했습니다.
 - 카드 2의 운영 bcrypt 결과와 인증 Payload·응답·Console·Edge Function 로그 원문 0건 확인은 여전히 운영 검증 전입니다.
 
 다음 단계:
 
-1. `supabase functions deploy account-delete --project-ref [가림]`를 비밀값을 출력하지 않는 환경에서 실행하고, 정적 앱을 재배포합니다.
-2. 별도 시험 계정에서 내보내기 후 `계정 삭제`를 실행하고, 재로그인 거절과 연결 자료 삭제를 가린 응답으로 기록합니다.
+1. 새 정적 앱을 재배포합니다.
+2. 별도 시험 계정에서 내보내기 후 삭제 전후 자료 행 수와 재로그인 거절을 가린 응답으로 기록합니다.
 3. 2일차 기록 뒤·3일차 기록 앞에 실제로 규칙을 바꿨는지와 정확한 시각·이유를 확인합니다. 확인할 수 없다면 현재 5일을 변경 전·후 증거로 사용하지 않습니다.
 4. 규칙 변경 사실이 확인되면 변경 전 2일 평균과 변경 후 3일 평균을 같은 분/일 규칙으로 계산합니다.
 
@@ -692,7 +692,7 @@ git diff --check
 
 - 로그인한 사용자의 access token을 `account-delete` Edge Function이 다시 검증하고, token에서 확인한 현재 Auth 사용자만 삭제하도록 구현했습니다. 주소·헤더·본문으로 전달되는 임의 사용자 ID는 사용하지 않습니다.
 - Auth 사용자 삭제 시 `plan_versions`, `tasks`, `task_execution_logs`, `task_completion_events`, `task_missed_days`, `reflections`의 해당 사용자 자료가 `on delete cascade`로 함께 삭제됩니다.
-- 신규 DB용 `supabase/schema.sql`의 연쇄 삭제 외래키를 확인했고, 기존 운영 DB의 여섯 외래키를 보강하는 `supabase/card5-account-delete-cascade.sql`을 추가했습니다.
+- 신규 DB용 `supabase/schema.sql`의 연쇄 삭제 외래키를 확인했고, 기존 운영 DB의 여섯 외래키를 보강하는 `supabase/account-delete-cascade.sql`을 추가했습니다.
 - 계정 영역에서 내보내기·로그아웃과 계정 삭제를 분리했습니다. 위험 구역에는 계정을 삭제하면 데이터베이스의 계획·할 일·실행·완료·지연·회고 자료도 함께 삭제되고 복구할 수 없다는 안내를 항상 표시합니다.
 - 삭제 전 브라우저 재확인, 처리 중 버튼 비활성화, 성공 후 로그인 화면 전환, 실패 시 자료가 변경되지 않았다는 안내를 유지했습니다.
 
@@ -702,7 +702,7 @@ git diff --check
 - `public/styles.css`
 - `public/app.js`
 - `supabase/functions/account-delete/index.ts`
-- `supabase/card5-account-delete-cascade.sql`
+- `supabase/account-delete-cascade.sql`
 - `supabase/config.toml`
 - `tests/card5-account-lifecycle.test.cjs`
 - `contracts/pds-schema-v2.json`
@@ -718,6 +718,51 @@ git diff --check
 
 아직 확인하지 않은 항목:
 
-- `supabase/card5-account-delete-cascade.sql`은 운영 Supabase에 아직 실행하지 않았습니다.
-- `account-delete` Edge Function과 새 정적 화면은 아직 운영 배포하지 않았습니다.
+- 사용자는 `supabase/account-delete-cascade.sql`을 운영 Supabase SQL Editor에서 실행했다고 밝혔습니다. 이번 작업에서는 실제 제약 조건 상태를 별도로 조회하지 않았습니다.
+- 사용자는 `account-delete` Edge Function을 운영 Supabase에 배포했고 브라우저에서 계정 삭제가 진행되는 것까지 확인했다고 밝혔습니다.
+- 새 계정 관리 메뉴와 삭제 모달을 포함한 정적 화면의 운영 배포 여부는 이번 작업에서 확인하지 않았습니다.
 - 실제 삭제 검증은 주 사용 계정이 아닌 별도 시험 계정으로 내보내기 후 수행해야 합니다.
+
+## 2026-09-26 계정 관리 메뉴와 삭제 이중 확인 UI
+
+- `Supabase 저장됨` 상태 옆에 `계정 관리` 버튼을 추가하고, 로그인 계정·로그아웃·계정 삭제를 펼침 패널 안으로 옮겼습니다.
+- 계정 삭제 위험 안내는 줄바꿈이 어색하지 않도록 단어 단위 줄바꿈을 적용하고, 삭제 버튼에는 테두리·아이콘·그림자를 추가했습니다.
+- 계정 삭제 버튼을 누르면 자료 삭제 범위와 내보내기 권장을 설명하는 모달이 먼저 열립니다.
+- 모달의 `삭제 계속하기`를 누른 뒤 브라우저 마지막 확인에 동의해야만 `account-delete` Edge Function을 호출합니다.
+- 계정 관리 패널은 바깥 클릭과 Esc로 닫히며, 로그아웃·삭제 모달 진입 시에도 닫힙니다.
+- 계정 관리 버튼 왼쪽의 장식 아이콘은 제거하고, 오른쪽 펼침 화살표를 16px SVG로 바꿔 버튼 높이의 중앙에 정렬했습니다.
+- 390px 모바일에서는 제목을 전체 폭으로 먼저 표시하고, 그 아래 `Supabase 저장됨`과 `계정 관리`를 한 줄에 배치해 제목이 글자 중간에서 끊기지 않게 했습니다.
+- 현재 기준 커밋은 `ec63620`이며 이번 UI 변경은 아직 커밋하지 않았습니다.
+
+관련 파일:
+
+- `public/index.html`
+- `public/styles.css`
+- `public/app.js`
+- `tests/card5-account-lifecycle.test.cjs`
+- `README.md`
+- `PROJECT_CONTEXT.md`
+
+실행한 검사:
+
+- `node tests\card5-account-lifecycle.test.cjs` — 계정 메뉴·삭제 이중 확인·연쇄 삭제 검사 34개 통과
+- `tests`의 `*.test.cjs`, `*.test.mjs` 전체 Node 검사 — 10개 파일 통과, 실패 0개
+- `node --check public\app.js` — 통과
+- `tests\git-secret-history.test.ps1` — Git 전체 patch 기록 비밀값 검사 통과
+- 현재 작업 트리 private secret 패턴 검사 — 발견 0건
+- `git diff --check` — 통과(LF→CRLF 안내만 표시)
+- 전체 검사 첫 실행에서는 HEAD에서 이름이 바뀐 SQL 파일을 카드 1~3 테스트가 예전 경로로 읽어 3개가 실패했습니다. 테스트·README·카드 문서·스키마 주석의 참조를 현재 `migrate-existing-data.sql`, `password-evidence.sql`, `session-revocation.sql` 경로로 고친 뒤 재실행해 모두 통과했습니다.
+
+아직 확인하지 않은 항목:
+
+- 이번 UI 변경은 아직 Vercel에 배포하지 않았으므로 운영 로그인 화면에서 데스크톱·모바일 시각 결과를 확인하지 않았습니다.
+- 배포된 이전 화면은 브라우저에서 확인했으며, 로그아웃·계정 삭제가 상시 노출되고 삭제 안내가 길게 표시되는 기존 문제를 재현했습니다.
+- 실제 변경 CSS를 사용하는 로컬 미리보기에서 데스크톱과 390px 모바일의 기본 화면·펼침 메뉴·삭제 모달을 확인했습니다. 모바일 제목 폭, 상태·계정 관리 한 줄 배치, 화살표 중앙 정렬을 시각 확인했습니다.
+- 이전 직접 요청에서는 `404`였지만, 이후 사용자가 운영 `account-delete` Edge Function 배포와 계정 삭제 진행을 확인했습니다.
+
+### 2026-09-26 account-delete 운영 배포 후속 확인
+
+- 사용자가 `account-delete` Edge Function을 운영 Supabase에 배포했습니다.
+- 사용자가 배포 앱에서 계정 삭제 요청이 실제로 진행되는 것까지 확인했습니다.
+- 이 기록은 사용자 확인에 근거하며, 이번 작업에서는 브라우저 요청 상태·Auth 사용자 삭제 여부·연결 자료의 삭제 전후 행 수를 다시 조회하지 않았습니다.
+- T07-C134의 최종 운영 증거로 사용할 때는 별도 시험 계정에서 삭제 전 자료 건수, 삭제 뒤 재로그인 거절, 여섯 자료 표의 본인 행 0건을 함께 확인하는 것이 남아 있습니다.

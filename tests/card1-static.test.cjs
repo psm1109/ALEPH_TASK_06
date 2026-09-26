@@ -8,7 +8,7 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "u
 const html = read("public/index.html");
 const app = read("public/app.js");
 const schema = read("supabase/schema.sql");
-const migration = read("supabase/card1-migrate-existing-data.sql");
+const migration = read("supabase/migrate-existing-data.sql");
 
 assert.match(html, /id="auth-screen"/);
 assert.match(html, /id="login-form"/);

@@ -19,7 +19,7 @@
 - 가입·로그인·로그아웃 처리: `public/app.js`의 `handleSignupSubmit`, `handleLoginSubmit`, `handleLogout`
 - 인증된 자료 요청: `public/app.js`의 `supabaseRequest`
 - 사용자별 자료 정책: `supabase/schema.sql`의 `owner ...` RLS 정책
-- 기존 자료 이관: `supabase/card1-migrate-existing-data.sql`
+- 기존 자료 이관: `supabase/migrate-existing-data.sql`
 
 ## 확인 기록
 
@@ -58,7 +58,7 @@
 
 1. Supabase SQL Editor에서 `supabase/schema.sql` 실행
 2. 가입 화면에서 본인 계정 생성 — 비밀번호는 사용자가 직접 입력하며 제출물에 남기지 않음
-3. `supabase/card1-migrate-existing-data.sql`의 이메일 두 곳만 바꾸어 실행
+3. `supabase/migrate-existing-data.sql`의 이메일 두 곳만 바꾸어 실행
 4. 가입, 로그인, 로그아웃 화면 확인
 5. 존재하지 않는 이메일과 올바른 이메일 + 틀린 비밀번호가 모두 `이메일 또는 비밀번호를 확인해 주세요.`인지 확인
 6. 로그인하지 않은 REST 요청이 거절되는 상태 코드와 가린 응답 기록
