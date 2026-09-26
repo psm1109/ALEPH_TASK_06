@@ -209,7 +209,7 @@ end;
 $$;
 
 revoke all on function private.check_auth_session() from public;
-grant execute on function private.check_auth_session() to authenticated;
+grant execute on function private.check_auth_session() to authenticated, service_role;
 
 -- PostgREST runs this before each Data API request. A revoked session therefore
 -- receives an HTTP error instead of an RLS-filtered 200 with an empty array.

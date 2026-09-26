@@ -39,7 +39,7 @@ end;
 $$;
 
 revoke all on function private.check_auth_session() from public;
-grant execute on function private.check_auth_session() to authenticated;
+grant execute on function private.check_auth_session() to authenticated, service_role;
 
 alter role authenticator set pgrst.db_pre_request = 'private.check_auth_session';
 notify pgrst, 'reload config';

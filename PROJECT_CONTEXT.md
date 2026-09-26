@@ -6,9 +6,10 @@
 
 - 저장소: `psm1109/ALEPH_TASK_06`
 - 작업 브랜치: `codex/card-1-auth`
-- 현재 기준 커밋: `cd9962b`
-- Turnstile 연동 기능은 `e130faf`, 후속 배포 순서 문서는 `cd9962b`로 `origin/codex/card-1-auth`에 푸시했습니다. 이번 점진적 로그인 제한 작업은 아직 커밋·푸시하지 않았습니다.
-- 원격 추적 브랜치: `origin/codex/card-1-auth`
+- 현재 기준 커밋: `2763d0c`
+- Turnstile 연동은 `e130faf`, 점진적 로그인 제한은 `cb5cc8d`, `service_role` 권한 복구는 `2763d0c`로 `origin/codex/card-1-auth`에 푸시했습니다.
+- 원격 추적 브랜치: `origin/codex/card-1-auth` (`2763d0c`)
+- 현재 작업 트리에는 Supabase Auth 오류의 `error_code`를 숫자 `code`보다 먼저 읽는 `auth-gateway` 수정, `service_role` 함수 실행 권한 보강, 카드 5·인계 문서 갱신이 커밋되지 않은 상태로 남아 있습니다.
 - 고정된 최종 T06 조상 커밋: `bab809b`
 - 현재 브랜치에는 병합 커밋 `59530ab`과 카드 1의 과거 커밋 두 개가 함께 있습니다. 앞으로는 현재 브랜치의 최신 파일과 HEAD를 기준으로 작업합니다.
 
@@ -906,3 +907,45 @@ git diff --check
 3. 서버 HMAC secret을 생성해 값이 보이지 않게 Edge Function Secrets의 `AUTH_THROTTLE_HMAC_SECRET`에 저장합니다.
 4. 최신 `auth-gateway`를 배포합니다.
 5. 별도 시험 계정에서 1~9회 실패와 성공 초기화, 제한 중 비연장, 새로고침·시크릿 창 우회 불가를 확인합니다.
+
+## 2026-09-26 카드 5 문서 및 로그인 공격 방어 운영 반영
+
+- `docs/card-5-auth-guide-and-five-day-use.md`에 운영 CAPTCHA 활성화, 서버 HMAC 기반 점진 제한, `service_role` 권한 장애와 복구, 로그인 실패 코드 판별 수정, 2FA·감사 로그의 미구현 범위를 반영했습니다.
+- 운영 Supabase에서 Cloudflare Turnstile을 활성화한 뒤 사용자가 정상 로그인을 확인했습니다. 첫 Secret 불일치로 `invalid-input-secret`이 발생했으나 Secret을 회전해 다시 등록한 뒤 정상화했습니다.
+- 운영 로그에서 반복된 비밀번호 실패가 `/auth/v1/token`의 `400 Invalid login credentials`로 나타나고 실패 기록 RPC가 호출되지 않던 것을 확인했습니다. `result.error_code`를 `result.code`보다 먼저 읽도록 `auth-gateway`를 수정·배포한 뒤 사용자가 로그인 제한 적용을 확인했습니다.
+- 최초 제한 배포 때 `private.check_auth_session()`의 `service_role` 실행 권한 누락으로 RPC가 `403`·PostgreSQL `42501`이 된 것을 확인했고, 운영 SQL에서 스키마 사용 권한과 함수 실행 권한을 추가했습니다.
+- 신규·증분 SQL 원본에도 `service_role`의 `private` 스키마 사용 및 `check_auth_session()` 실행 권한을 반영했습니다. 전체 `schema.sql` 재실행은 기존 중복 `task_completion_events` 자료 때문에 유니크 인덱스 생성이 실패할 수 있으므로, 운영 복구에는 전체 SQL을 다시 실행하지 않고 필요한 `grant`만 사용합니다.
+- 애플리케이션 전용 장기 로그인 감사 로그는 아직 없습니다. Supabase 기본 로그와 제한 상태 테이블은 확인할 수 있지만 성공 시 제한 행을 지우고 24시간 지난 행을 정리합니다.
+- 2FA/MFA와 `aal2` RLS 강제는 다음 작업으로 남겨 두었습니다.
+
+관련 파일:
+
+- `docs/card-5-auth-guide-and-five-day-use.md`
+- `supabase/schema.sql`
+- `supabase/session-revocation.sql`
+- `supabase/functions/auth-gateway/index.ts`
+- `PROJECT_CONTEXT.md`
+
+실행한 검사:
+
+- `node tests\auth-throttle.test.cjs` — 36개 통과
+- `node tests\auth-captcha.test.cjs` — 13개 통과
+- `node tests\card5-account-lifecycle.test.cjs` — 34개 통과
+- `tests`의 `*.test.cjs`, `*.test.mjs` 전체 Node 검사 — 12개 파일 통과, 실패 0개
+- `node --check public\app.js` — 통과
+- `node --check scripts\generate-auth-throttle-secret.mjs` 및 관련 스크립트 4개 — 통과
+- `tests\git-secret-history.test.ps1` — 통과
+- `git diff --check` — 통과(LF→CRLF 안내만 표시)
+
+확인하지 않은 항목:
+
+- 3~9회 전체 제한 단계, 정상 로그인 후 초기화, 새로고침·시크릿 창·다중 IP/계정 우회 여부를 각 단계별로 다시 측정하지 않았습니다.
+- 2FA 등록·인증 및 `aal2` 기반 RLS 강제를 구현·검증하지 않았습니다.
+- 애플리케이션 전용 장기 로그인 감사 로그를 구현하지 않았습니다.
+- 현재 작업 트리의 `auth-gateway`·SQL·문서 변경은 아직 커밋·푸시하지 않았습니다.
+
+다음 단계:
+
+1. 변경 diff를 검토하고 `auth-gateway` 오류 코드 수정, 두 SQL 권한 보강, 카드 5 문서 변경을 함께 커밋·푸시합니다.
+2. 새 `auth-gateway` 배포 뒤 시험 계정에서 3회 이상 실패의 `429`와 성공 초기화를 확인합니다.
+3. 이후 별도 작업으로 2FA 등록 강제와 `aal2` RLS를 설계합니다.

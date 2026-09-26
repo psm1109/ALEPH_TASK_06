@@ -209,7 +209,7 @@ Deno.serve(async (request) => {
 
     const result = await upstream.json().catch(() => ({}));
     if (!upstream.ok) {
-      const upstreamCode = String(result.code || result.error_code || "");
+      const upstreamCode = String(result.error_code || result.code || "");
       if (subjects && upstreamCode === "invalid_credentials") {
         const status = await throttleRpc("auth_login_throttle_fail", subjects);
         if (!status.allowed) return throttled(status);
