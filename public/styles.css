@@ -74,6 +74,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .auth-form { display: grid; gap: 16px; }
 .auth-form label { display: grid; gap: 7px; color: #445269; font-size: .82rem; font-weight: 750; }
 .auth-form .button { width: 100%; margin-top: 4px; }
+.auth-form .button:disabled { cursor: not-allowed; opacity: .62; }
 .auth-help { margin: -4px 0 0; color: var(--muted); font-size: .75rem; line-height: 1.55; }
 .auth-captcha { min-height: 65px; display: flex; justify-content: center; }
 .auth-captcha:empty { min-height: 0; }

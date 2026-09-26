@@ -1,3 +1,4 @@
 /design/*
 /supabase/.env.auth.local
+/supabase/.env.auth-throttle.local
 /supabase/.temp/

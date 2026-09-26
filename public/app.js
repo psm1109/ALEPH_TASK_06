@@ -19,6 +19,7 @@ const EXPORT_SCHEMA_VERSION = "2.3.0";
 const GENERIC_LOGIN_ERROR = "이메일 또는 비밀번호를 확인해 주세요.";
 const TURNSTILE_SCRIPT_URL = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 const CAPTCHA_REQUIRED_ERROR = "자동화 방지 확인을 완료한 뒤 다시 시도해 주세요.";
+const LOGIN_COOLDOWN_COMPLETE = "다시 로그인할 수 있습니다. 자동화 방지 확인을 새로 완료해 주세요.";
 
 let turnstileLoadPromise = null;
 
@@ -28,6 +29,8 @@ const state = {
   session: null,
   captchaWidgets: { login: null, signup: null },
   captchaTokens: { login: "", signup: "" },
+  loginCooldownUntil: 0,
+  loginCooldownTimer: null,
   connected: false,
   loading: false,
   versions: [],
@@ -58,6 +61,7 @@ const elements = {
   loginTab: $("#login-tab"),
   signupTab: $("#signup-tab"),
   loginForm: $("#login-form"),
+  loginSubmit: $("#login-submit"),
   signupForm: $("#signup-form"),
   loginCaptcha: $("#login-captcha"),
   signupCaptcha: $("#signup-captcha"),
@@ -178,8 +182,48 @@ async function requestProtectedAuth(mode, email, password, captchaToken) {
     body: JSON.stringify({ mode, captcha_token: captchaToken, ...encrypted }),
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error("인증 요청을 처리하지 못했습니다.");
+  if (!response.ok) {
+    const error = new Error("인증 요청을 처리하지 못했습니다.");
+    error.status = response.status;
+    error.retryAfterSeconds = Math.max(0, Number(payload.retry_after_seconds) || 0);
+    throw error;
+  }
   return payload;
+}
+
+function updateLoginCooldown() {
+  const remainingSeconds = Math.max(0, Math.ceil((state.loginCooldownUntil - Date.now()) / 1000));
+  if (remainingSeconds > 0) {
+    elements.loginSubmit.disabled = true;
+    elements.loginSubmit.textContent = `로그인 (${remainingSeconds}초 후)`;
+    showAuthNotice(`로그인 시도가 잠시 제한되었습니다. ${remainingSeconds}초 후 다시 시도해 주세요.`);
+    return;
+  }
+
+  if (state.loginCooldownTimer !== null) {
+    clearInterval(state.loginCooldownTimer);
+    state.loginCooldownTimer = null;
+    showAuthNotice(LOGIN_COOLDOWN_COMPLETE, "success");
+  }
+  state.loginCooldownUntil = 0;
+  elements.loginSubmit.textContent = "로그인";
+  elements.loginSubmit.disabled = state.loading;
+}
+
+function startLoginCooldown(retryAfterSeconds) {
+  const seconds = Math.max(1, Math.ceil(Number(retryAfterSeconds) || 0));
+  state.loginCooldownUntil = Date.now() + (seconds * 1000);
+  if (state.loginCooldownTimer !== null) clearInterval(state.loginCooldownTimer);
+  updateLoginCooldown();
+  state.loginCooldownTimer = setInterval(updateLoginCooldown, 250);
+}
+
+function clearLoginCooldown() {
+  if (state.loginCooldownTimer !== null) clearInterval(state.loginCooldownTimer);
+  state.loginCooldownTimer = null;
+  state.loginCooldownUntil = 0;
+  elements.loginSubmit.textContent = "로그인";
+  elements.loginSubmit.disabled = state.loading;
 }
 
 async function persistProtectedSession(payload) {
@@ -201,6 +245,7 @@ function setAuthMode(mode) {
   elements.loginForm.hidden = !isLogin;
   elements.signupForm.hidden = isLogin;
   elements.authNotice.hidden = true;
+  if (isLogin) updateLoginCooldown();
   renderCaptcha(isLogin ? "login" : "signup");
   const firstInput = (isLogin ? elements.loginForm : elements.signupForm).elements.email;
   firstInput.focus({ preventScroll: true });
@@ -237,6 +282,7 @@ function showSignedOutScreen(message = "") {
 }
 
 async function showSignedInApp(session, { reload = true } = {}) {
+  clearLoginCooldown();
   state.session = session;
   elements.signedInEmail.textContent = session.user.email || "로그인 사용자";
   elements.authScreen.hidden = true;
@@ -270,8 +316,12 @@ async function handleLoginSubmit(event) {
     elements.loginForm.reset();
     await showSignedInApp(session);
     showNotice("로그인했습니다. 이 계정의 기록만 불러왔습니다.", "success", 3200);
-  } catch {
-    showAuthNotice(GENERIC_LOGIN_ERROR);
+  } catch (error) {
+    if (error.status === 429 && error.retryAfterSeconds > 0) {
+      startLoginCooldown(error.retryAfterSeconds);
+    } else {
+      showAuthNotice(GENERIC_LOGIN_ERROR);
+    }
   } finally {
     elements.loginForm.elements.password.value = "";
     resetCaptcha("login");
@@ -518,6 +568,7 @@ function setLoading(isLoading) {
   $$(`button[type="submit"], .modal .button.primary`).forEach((button) => {
     button.disabled = isLoading;
   });
+  if (!isLoading) updateLoginCooldown();
 }
 
 function setConnectionState(status, label) {

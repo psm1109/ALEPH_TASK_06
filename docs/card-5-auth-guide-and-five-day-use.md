@@ -51,7 +51,7 @@
 
 ## ⑥ 아직 못 막은 것
 
-운영 Supabase의 로그인·가입 Rate Limit은 IP당 10 requests/5 min으로 낮췄고, Cloudflare Turnstile 토큰을 `auth-gateway`가 Supabase Auth에 전달하는 코드를 준비했다. 다만 새 정적 앱과 Edge Function 배포, Supabase CAPTCHA 활성화, 운영 로그인 검증 전에는 CAPTCHA 방어가 적용됐다고 판정하지 않는다. 무료 플랜에서는 계정 단위 Password Verification Hook을 쓸 수 없으므로 이후 점진적 지연과 임시 제한은 게이트웨이 보조 방어로 별도 구현해야 하며, Supabase Auth 직접 호출에는 Rate Limit과 CAPTCHA가 주 방어선이다.
+운영 Supabase의 로그인·가입 Rate Limit은 IP당 10 requests/5 min으로 낮췄고, Cloudflare Turnstile 토큰을 `auth-gateway`가 Supabase Auth에 전달해 정상 로그인되는 것을 사용자가 확인했다. 비밀번호 로그인에 쓰이는 `/auth/v1/token`은 별도 제한 대상이므로 게이트웨이는 계정·IP의 서버 HMAC 해시를 이용해 3회부터 점진적 재시도 제한, 9회부터 15분 제한을 적용하도록 준비했다. 이 추가 제한은 SQL·서버 secret·정적 앱·Edge Function을 순서대로 운영 배포하고 실제 실패 횟수별 응답을 확인하기 전에는 적용 완료로 판정하지 않는다.
 
 ## 1일차에 고정한 질문과 지표
 

@@ -182,6 +182,7 @@
     "password_transport": "The browser sends a one-time CAPTCHA token and RSA-OAEP-256 wrapped AES-256-GCM ciphertext to the auth-gateway Edge Function; plaintext password fields are not included in browser network payloads.",
     "password_logging": "The app and auth-gateway do not log passwords or raw authentication request and response bodies; upstream authentication errors are replaced with generic responses.",
     "captcha_protection": "Cloudflare Turnstile issues a one-time token for login and signup; auth-gateway forwards it to Supabase Auth for server-side verification.",
+    "login_throttling": "The auth-gateway uses server-keyed HMAC hashes of normalized account identifiers and platform client IPs to enforce database-backed progressive cooldowns and a 15-minute temporary limit without storing raw email or IP values.",
     "authorization": "PostgreSQL RLS requires authenticated and user_id = auth.uid().",
     "access_token_transport": "Authorization header only; never URL query parameters.",
     "rendering": "사용자 입력은 textContent 또는 HTML 이스케이프 후 표시한다.",

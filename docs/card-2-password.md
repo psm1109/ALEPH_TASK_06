@@ -16,7 +16,7 @@ bcrypt는 비밀번호 저장을 위해 널리 사용되는 느린 해시 함수
 
 - 비밀번호 원문 입력: `public/index.html`의 `type="password"` 입력칸
 - 가입·로그인 전달: `public/app.js`에서 자격 증명을 AES-256-GCM으로 암호화하고 AES 키를 RSA-OAEP-256으로 감싼 뒤 일회용 Turnstile 토큰과 함께 `auth-gateway`에 전달
-- 서버 중계: `supabase/functions/auth-gateway/index.ts`가 메모리에서만 복호화해 Supabase Auth에 전달하고 요청·응답 본문을 기록하지 않음
+- 서버 중계: `supabase/functions/auth-gateway/index.ts`가 메모리에서만 복호화해 Supabase Auth에 전달하고 요청·응답 본문을 기록하지 않음. 로그인은 계정·IP 원문 대신 서버 HMAC 해시로 실패 상태를 확인하고, 제한 중이면 Auth 호출 전에 `429`로 거절함
 - 저장과 검증: Supabase Auth 서비스
 - 저장된 해시 위치: Supabase 내부 `auth.users.encrypted_password`
 - 해시 증거 쿼리: `supabase/password-evidence.sql`

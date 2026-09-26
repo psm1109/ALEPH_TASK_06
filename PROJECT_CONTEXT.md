@@ -6,8 +6,8 @@
 
 - 저장소: `psm1109/ALEPH_TASK_06`
 - 작업 브랜치: `codex/card-1-auth`
-- 현재 기능 기준 커밋: `e130faf`
-- Rate Limit 운영 조정 기록과 Turnstile 연동 코드·테스트·문서를 `e130faf`로 커밋해 `origin/codex/card-1-auth`에 푸시했습니다.
+- 현재 기준 커밋: `cd9962b`
+- Turnstile 연동 기능은 `e130faf`, 후속 배포 순서 문서는 `cd9962b`로 `origin/codex/card-1-auth`에 푸시했습니다. 이번 점진적 로그인 제한 작업은 아직 커밋·푸시하지 않았습니다.
 - 원격 추적 브랜치: `origin/codex/card-1-auth`
 - 고정된 최종 T06 조상 커밋: `bab809b`
 - 현재 브랜치에는 병합 커밋 `59530ab`과 카드 1의 과거 커밋 두 개가 함께 있습니다. 앞으로는 현재 브랜치의 최신 파일과 HEAD를 기준으로 작업합니다.
@@ -844,3 +844,65 @@ git diff --check
 - 기능 커밋: `e130faf` (`feat: 로그인과 가입에 Turnstile CAPTCHA 보호 추가`)
 - 원격 반영: `origin/codex/card-1-auth`에 푸시 완료
 - 커밋 직전 전체 Node 검사: 11개 파일, 총 169개 통과, 실패 0개
+
+### 2026-09-26 CAPTCHA 운영 활성화 후속 확인
+
+- Supabase Authentication > Attack Protection에서 Cloudflare Turnstile CAPTCHA가 활성화됐습니다.
+- 첫 로그인 실패를 Supabase Auth 로그에서 조사해 `invalid-input-secret`을 확인했고, 비밀번호 오류가 아니라 CAPTCHA Secret 불일치가 원인이었음을 구분했습니다.
+- 사용자가 Cloudflare의 올바른 Secret을 Supabase에 다시 등록한 뒤 운영 앱에서 정상 로그인되는 것을 확인했습니다.
+- Secret 원문은 코드·문서에 기록하지 않았습니다.
+- 이 정상 로그인 확인은 사용자 확인에 근거하며, 이번 로컬 작업에서는 비밀번호나 CAPTCHA 토큰을 입력해 재현하지 않았습니다.
+
+## 2026-09-26 로그인 공격 방어 3단계 — 점진 제한 로컬 구현
+
+- `private.auth_login_throttle`에 계정·IP의 서버 HMAC 해시, 실패 횟수, 다음 허용 시각, 15분 제한 종료 시각만 저장하도록 SQL을 추가했습니다. 이메일·IP·비밀번호·CAPTCHA 토큰 원문은 저장하지 않습니다.
+- 1~2회는 일반 실패, 3회부터 `2 → 5 → 15 → 30 → 60 → 120초`, 9회부터 15분 제한을 적용합니다.
+- 제한 중 재시도는 실패 횟수나 제한 종료 시각을 늘리지 않습니다. 24시간 지난 실패 행은 다음 실패 처리 때 정리합니다.
+- 계정 해시는 여러 IP의 동일 계정 공격을, IP 해시는 한 IP의 여러 계정 공격을 제한합니다. IP는 클라이언트 전달값이 아니라 Edge가 주입하는 `cf-connecting-ip`만 사용하며, 헤더가 없는 로컬 환경에서는 계정 기준만 적용합니다.
+- Supabase Auth의 `invalid_credentials` 응답만 실패로 기록합니다. CAPTCHA·요청 형식·네트워크·서버 오류는 비밀번호 실패 횟수에 포함하지 않습니다.
+- 정상 로그인은 관련 제한 상태를 초기화합니다.
+- 브라우저는 서버의 `429`와 `retry_after_seconds`를 받아 로그인 버튼과 안내 문구에 남은 시간을 표시합니다. 화면 타이머는 편의 표시이며 실제 허용 여부는 서버 DB가 결정합니다.
+- 비밀번호 로그인은 `/auth/v1/token`을 사용해 앞서 낮춘 로그인·가입 Rate Limit과 별도 버킷의 영향을 받으므로, 게이트웨이 제한을 추가 방어선으로 사용합니다.
+- HMAC 비밀값 생성 스크립트는 값을 출력하지 않고 Git 제외 대상 `supabase/.env.auth-throttle.local`에만 기록하도록 추가했습니다. 실제 비밀값 파일은 이번 작업에서 생성하지 않았습니다.
+
+관련 파일:
+
+- `supabase/login-throttle.sql`
+- `supabase/schema.sql`
+- `supabase/functions/auth-gateway/index.ts`
+- `scripts/generate-auth-throttle-secret.mjs`
+- `public/index.html`
+- `public/app.js`
+- `public/styles.css`
+- `tests/auth-throttle.test.cjs`
+- `contracts/pds-schema-v2.json`
+- `README.md`
+- `docs/card-2-password.md`
+- `docs/card-5-auth-guide-and-five-day-use.md`
+
+실행한 검사:
+
+- `tests`의 `*.test.cjs`, `*.test.mjs` 전체 Node 검사 — 12개 파일, 총 205개 통과, 실패 0개
+- `node tests/auth-throttle.test.cjs` — 점진 제한 보안·SQL·화면 검사 36개 통과
+- `node --check public/app.js` — 통과
+- `node --check scripts/generate-auth-throttle-secret.mjs` — 통과
+- `contracts/pds-schema-v2.json` JSON 파싱 — 통과
+- `tests/git-secret-history.test.ps1` — Git 전체 patch 기록 비밀값 검사 통과
+- 현재 작업 트리 private secret 패턴 검사 — 발견 0건
+- `git diff --check` — 통과(LF→CRLF 안내만 표시)
+- 점진 제한 검사 첫 실행은 테스트가 `response.status`를 찾았지만 실제 앱이 `error.status`로 전달하는 구조라 단언 1개가 실패했습니다. 실제 구현 경계에 맞게 테스트를 수정한 뒤 전체 검사를 다시 실행해 통과했습니다.
+
+아직 확인하지 않은 항목:
+
+- 로컬 환경에 `deno`와 Supabase CLI가 없어 Edge Function Deno 타입 검사와 로컬 Supabase 실행은 하지 못했습니다.
+- `supabase/login-throttle.sql`은 운영 SQL Editor에서 실행하지 않았습니다.
+- `AUTH_THROTTLE_HMAC_SECRET`은 운영 Edge Function Secrets에 만들거나 저장하지 않았습니다.
+- 새 정적 앱과 `auth-gateway`를 운영 배포하지 않았고, 실제 3~9회 실패·새로고침·시크릿 창·다중 IP/계정 동작은 검증하지 않았습니다.
+
+안전한 다음 순서:
+
+1. 변경을 검토하고 커밋·푸시해 Vercel 정적 앱을 먼저 배포합니다.
+2. 운영 SQL Editor에서 `supabase/login-throttle.sql`을 실행합니다.
+3. 서버 HMAC secret을 생성해 값이 보이지 않게 Edge Function Secrets의 `AUTH_THROTTLE_HMAC_SECRET`에 저장합니다.
+4. 최신 `auth-gateway`를 배포합니다.
+5. 별도 시험 계정에서 1~9회 실패와 성공 초기화, 제한 중 비연장, 새로고침·시크릿 창 우회 불가를 확인합니다.

@@ -11,7 +11,7 @@
 - 로그인·가입 자격 증명은 Web Crypto의 AES-256-GCM으로 암호화하고, 일회용 AES 키는 RSA-OAEP-256으로 다시 암호화해 `auth-gateway` Edge Function에 전달합니다.
 - 브라우저 네트워크 요청에는 이메일·비밀번호 필드 대신 일회용 `captcha_token`과 `encrypted_key`, `iv`, `ciphertext`만 남습니다.
 - Cloudflare Turnstile의 관리형 위젯이 로그인·가입마다 일회용 토큰을 만들고, Supabase Auth가 Secret key로 토큰을 검증합니다.
-- 운영 Supabase의 로그인·가입 Rate Limit은 IP당 10 requests/5 min으로 설정했습니다.
+- 운영 Supabase의 로그인·가입 Rate Limit은 IP당 10 requests/5 min으로 설정했습니다. 비밀번호 로그인에 쓰이는 `/auth/v1/token`은 별도 제한이므로 `auth-gateway`에서도 계정·IP HMAC 기준 점진 제한을 적용합니다.
 - 로그인하지 않은 상태에서는 URL의 `#plan`, `#do`, `#see`, `#history`를 직접 열어도 다이어리 대신 로그인 화면이 나옵니다.
 - 모든 자료 요청은 세션 access token을 `Authorization` 헤더로 보내며 URL에는 싣지 않습니다.
 - 각 자료 행의 `user_id`가 서버의 `auth.uid()`와 같은지는 PostgreSQL RLS가 검사합니다.
@@ -76,7 +76,7 @@
 
 1. Supabase 프로젝트의 SQL Editor에서 [`supabase/schema.sql`](supabase/schema.sql)을 실행합니다. 이 SQL은 RLS뿐 아니라 로그아웃된 세션을 Data API에서 즉시 거절하는 사전 요청 검사도 설정합니다.
    기존 카드 1 스키마가 이미 적용된 프로젝트에는 [`supabase/session-revocation.sql`](supabase/session-revocation.sql)만 실행해 카드 3 변경을 증분 적용할 수 있습니다.
-   기존 PDS Diary 데이터베이스에는 [`supabase/daily-completion.sql`](supabase/daily-completion.sql)과 [`supabase/daily-missed-days.sql`](supabase/daily-missed-days.sql)을 추가로 실행합니다. 이전 버전의 완료 SQL을 이미 실행했다면 새 내용을 다시 실행합니다. 오늘 체크를 풀었던 기존 완료 이벤트는 정리하고, 이전 날짜의 이벤트와 실행 기록은 보존합니다. 과거에 저장되지 못한 완료 날짜는 복구할 수 없습니다.
+   기존 PDS Diary 데이터베이스에는 [`supabase/daily-completion.sql`](supabase/daily-completion.sql), [`supabase/daily-missed-days.sql`](supabase/daily-missed-days.sql), [`supabase/login-throttle.sql`](supabase/login-throttle.sql)을 추가로 실행합니다. 이전 버전의 완료 SQL을 이미 실행했다면 새 내용을 다시 실행합니다. 오늘 체크를 풀었던 기존 완료 이벤트는 정리하고, 이전 날짜의 이벤트와 실행 기록은 보존합니다. 과거에 저장되지 못한 완료 날짜는 복구할 수 없습니다.
 2. Supabase Authentication의 Email provider를 활성화합니다. 과제 확인 중 가입 직후 로그인해야 한다면 Confirm email을 끕니다.
 3. [`public/config.js`](public/config.js)에 Project URL, `sb_publishable_...` 형식의 Publishable key, 공개 가능한 Turnstile Site key를 설정합니다.
 4. 가입 화면에서 기존 자료를 소유할 본인 계정을 만듭니다.
@@ -90,12 +90,15 @@
 
 ```powershell
 node scripts/generate-auth-key.mjs
+node scripts/generate-auth-throttle-secret.mjs
 supabase secrets set --env-file supabase/.env.auth.local --project-ref YOUR_PROJECT_REF
+supabase secrets set --env-file supabase/.env.auth-throttle.local --project-ref YOUR_PROJECT_REF
 supabase secrets set AUTH_ALLOWED_ORIGIN=https://YOUR_DEPLOYED_ORIGIN --project-ref YOUR_PROJECT_REF
 supabase functions deploy auth-gateway --project-ref YOUR_PROJECT_REF
 ```
 
-- `supabase/.env.auth.local`은 Git에서 제외되며 내용을 문서·로그·채팅에 복사하지 않습니다.
+- `supabase/.env.auth.local`과 `supabase/.env.auth-throttle.local`은 Git에서 제외되며 내용을 문서·로그·채팅에 복사하지 않습니다.
+- `AUTH_THROTTLE_HMAC_SECRET`은 이메일과 IP 원문을 저장하지 않고 안정적인 HMAC 식별자를 만들기 위한 32바이트 서버 전용 비밀값입니다.
 - `AUTH_ALLOWED_ORIGIN`은 실제 웹 앱의 정확한 origin으로 지정합니다. 로컬에서 별도 Supabase 프로젝트를 쓸 때만 로컬 origin을 설정합니다.
 - 키를 다시 생성했다면 새 secret을 적용한 직후 함수를 다시 배포합니다.
 - 함수가 배포되지 않았거나 secret이 없으면 로그인·가입은 안전하게 실패하며 Supabase Auth로 직접 우회하지 않습니다.
@@ -119,6 +122,16 @@ window.__PDS_CONFIG__ = {
 5. 마지막으로 Supabase Authentication > Attack Protection에서 Turnstile을 선택하고 Secret key를 직접 입력해 CAPTCHA를 활성화합니다.
 
 이 순서를 바꾸어 Supabase CAPTCHA부터 켜면 아직 토큰을 보내지 않는 배포 앱의 로그인·가입이 모두 실패할 수 있습니다. Turnstile Secret key가 노출됐다면 Cloudflare에서 회전한 뒤 Supabase에도 새 값만 입력합니다.
+
+### 점진적 로그인 제한 배포 순서
+
+1. 운영 SQL Editor에서 `supabase/login-throttle.sql`을 실행합니다.
+2. `scripts/generate-auth-throttle-secret.mjs`로 Git 제외 대상 비밀값 파일을 만들고 `AUTH_THROTTLE_HMAC_SECRET`을 Edge Function Secrets에 저장합니다.
+3. 제한 응답 카운트다운이 포함된 정적 앱을 먼저 배포합니다.
+4. 최신 `auth-gateway`를 배포합니다.
+5. 틀린 비밀번호로 3회부터 `2 → 5 → 15 → 30 → 60 → 120초`, 9회부터 15분 제한이 적용되는지 시험 계정으로 확인합니다.
+
+제한 상태는 `private.auth_login_throttle`에 계정·IP의 서버 HMAC 해시로만 저장합니다. 제한 중 재시도는 횟수나 종료 시각을 늘리지 않고, 정상 로그인은 관련 상태를 초기화합니다. CAPTCHA 실패·네트워크 장애·Supabase 내부 오류는 비밀번호 실패 횟수에 포함하지 않습니다. SQL이나 HMAC secret 없이 새 `auth-gateway`부터 배포하면 로그인이 안전하게 실패하므로 위 순서를 지킵니다.
 
 ## 로컬 실행
 
@@ -145,6 +158,7 @@ python -m http.server 4173 --directory public
 │  └─ config.js        # Project URL과 Publishable key
 ├─ scripts/
 │  ├─ generate-auth-key.mjs # Git 제외 대상 RSA 비밀키 파일 생성
+│  ├─ generate-auth-throttle-secret.mjs # Git 제외 대상 로그인 HMAC 비밀값 생성
 │  ├─ verify-session-revocation.mjs # 시험 계정 자동 로그인 방식의 세션 비교
 │  └─ card3-browser-evidence.js # 로그인된 브라우저의 가린 세션 비교
 ├─ supabase/
@@ -156,6 +170,7 @@ python -m http.server 4173 --directory public
 │  ├─ daily-completion.sql # 기존 DB의 날짜별 완료 기록 전환
 │  ├─ daily-missed-days.sql # 기존 DB의 날짜별 미완료 기록 테이블 추가
 │  ├─ account-delete-cascade.sql # 기존 운영 DB의 사용자 외래키를 연쇄 삭제로 보강
+│  ├─ login-throttle.sql # 계정·IP HMAC 기반 점진 제한 상태와 서버 RPC
 │  ├─ session-revocation.sql # 기존 운영 DB용 즉시 세션 폐기 증분 SQL
 │  └─ migrate-existing-data.sql # 기존 pds-main 자료 소유자 이관
 └─ contracts/
@@ -185,6 +200,7 @@ node tests/card1-static.test.cjs
 node tests/card2-password.test.cjs
 node tests/auth-crypto.test.mjs
 node tests/auth-captcha.test.cjs
+node tests/auth-throttle.test.cjs
 node tests/card3-session.test.cjs
 node --check scripts/card3-browser-evidence.js
 node tests/card5-account-lifecycle.test.cjs
